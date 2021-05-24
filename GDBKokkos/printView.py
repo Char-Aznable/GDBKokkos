@@ -72,10 +72,11 @@ def getKokkosViewStrides(view : gdb.Value):
     offset = view['m_map']['m_impl_offset']
     if 'm_stride' in { m.name for m in foreachMemberOfClass(offset.type) }:
         strides = offset['m_stride']
-        if strides.type.name == 'size_type':
+        Tstrides = gdb.types.get_basic_type(strides.type)
+        if Tstrides.code == gdb.TYPE_CODE_INT:
             mStride = np.array([strides], dtype=int)
         elif re.match(r"^Kokkos::Impl::ViewOffset.*::stride_type$",
-                      strides.type.name) is not None:
+                      Tstrides.name) is not None:
             mStride = np.array([ strides[f"{f.name}"]
                                 for f in foreachMemberOfClass(strides.type) ],
                                dtype=int)
