@@ -195,6 +195,8 @@ class printView(gdb.Command):
         parser.add_argument("ranges", type=int, nargs='*', default=[],
                             help="Ranges for each of the dimension. Default to\
                             print the entire view")
+        parser.add_argument("--noIndex", action='store_true', default=False,
+                            help="Do not show the rank indices when printing the view")
         return parser.parse_args(inputArgs.split())
 
     def parseRanges(self, ranges : list):
@@ -231,5 +233,6 @@ class printView(gdb.Command):
                                    'display.max_rows', 99999,
                                    'display.max_colwidth', 2000,
                                    ):
-                print(df)
+                print(df.to_string(index=not args.noIndex,
+                                   header=not args.noIndex))
 
