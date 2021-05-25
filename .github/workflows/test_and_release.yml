@@ -1,4 +1,4 @@
-name: Set up Conda to test and release to PyPi
+name: Build and Test
 on: [push, pull_request]
 
 jobs:
