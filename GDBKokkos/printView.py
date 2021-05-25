@@ -75,13 +75,13 @@ def getKokkosViewStrides(view : gdb.Value):
         Tstrides = gdb.types.get_basic_type(strides.type)
         if Tstrides.code == gdb.TYPE_CODE_INT:
             mStride = np.array([strides], dtype=int)
-        elif re.match(r"^Kokkos::Impl::ViewOffset.*::stride_type$",
+        elif re.match(r"^Kokkos::Impl::ViewStride<\d+>$",
                       Tstrides.name) is not None:
             mStride = np.array([ strides[f"{f.name}"]
                                 for f in foreachMemberOfClass(strides.type) ],
                                dtype=int)
         else:
-            raise TypeError(f"Can't get strides from type {strides.type.name}")
+            raise TypeError(f"Can't get strides from type {Tstrides.name}")
 
     # if the view doesn't have stride then return None
     if mStride is None:
