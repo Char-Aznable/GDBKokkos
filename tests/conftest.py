@@ -67,7 +67,7 @@ def generateCMakeProject(writeCPP):
     fBuildDir = p.mkdir("build")
     with fBuildDir.as_cwd():
         cmdCmake = [f"cmake {fCMakeLists.dirpath().strpath} "
-                    f"-DCMAKE_CXX_COMPILER=g++ "
+                    f"-DCMAKE_CXX_COMPILER=x86_64-conda-linux-gnu-g++ "
                     f"-DCMAKE_CXX_STANDARD=14 "
                     f"-DCMAKE_CXX_FLAGS='-DDEBUG -O0 -g' "
                     f"-DCMAKE_VERBOSE_MAKEFILE=ON "
