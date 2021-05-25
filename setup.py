@@ -31,8 +31,7 @@ setuptools.setup(
         "pandas",
     ],
     extras_require = {
-        "tests" : ["pytest", "pytest-cov", "codecov",
-                   "cmake", "ninja"]
+        "tests" : ["pytest", "pytest-cov", "codecov"]
     },
     data_files = [("", ["LICENSE"])]
 )
