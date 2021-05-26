@@ -30,6 +30,9 @@ def getKokkosViewExtent(view : gdb.Value):
     viewDimName = view['m_map']['m_impl_offset'].type.template_argument(0).name
     # for the dynamic dimension, get the size from ViewDimension::D0, ::D1, ...
     extents = np.array(re.findall(r'\d+', viewDimName)).astype(int)
+    # There is the special case of extents being of size 0, which is a
+    # specialization for ViewDimension<>, which indicates the view is a scalar
+    # view (rank 0 view). In this case, we return an array of zero size
     for iDim in range(extents.size):
         if extents[iDim] > 0:
             continue
@@ -148,6 +151,8 @@ def getKokkosViewSpan(view : gdb.Value):
     strides = getKokkosViewStrides(view)
     extents = getKokkosViewExtent(view)
     if strides is None:
+        # If extents.size == 0, this will return 1, according to
+        # https://numpy.org/doc/stable/reference/generated/numpy.prod.html
         return np.prod(extents)
     else:
         return (extents * strides).max()
