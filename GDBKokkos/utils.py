@@ -8,6 +8,7 @@
 # Distributed under terms of the 3-clause BSD license.
 import numpy as np
 import gdb
+import re
 
 def name2type(name : str):
     """Get gdb.Type from a string of the type name
