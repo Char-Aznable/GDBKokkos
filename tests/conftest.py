@@ -11,6 +11,7 @@ import subprocess
 import pytest
 import textwrap
 import os
+import shutil
 
 @pytest.fixture(scope="module")
 def writeCPP(tmpdir_factory, request):
@@ -39,9 +40,19 @@ def writeCPP(tmpdir_factory, request):
     yield (p, fCXX)
 
 @pytest.fixture(scope="module")
-def generateToolLibrary(request):
+def generateToolLibrary(tmpdir_factory, request):
+    p = tmpdir_factory.mktemp("TestTool")
+    srcpath = request.config.rootdir.join("ToolExtensions").join("kp_gdb_extension.cpp")
+    makefilepath = request.config.rootdir.join("ToolExtensions").join("Makefile")
     libpath = request.config.rootdir.join("ToolExtensions").join("kp_gdb_extension.so")
-    yield (libpath)
+    shutil.copy(srcpath, str(p))
+    shutil.copy(makefilepath, str(p))
+    with p.as_cwd():
+        cmdMake = [f"make"
+                    ]
+        rCmake = subprocess.run(cmdMake, shell=True, capture_output=True,
+                                encoding='utf-8')
+    yield (p.join("kp_gdb_extension.so"))
 
 @pytest.fixture(scope="module")
 def generateCMakeProject(writeCPP):
