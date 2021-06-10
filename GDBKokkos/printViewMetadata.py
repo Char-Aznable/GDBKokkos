@@ -73,7 +73,7 @@ class printViewMetadata(gdb.Command):
                         names.add(name)
             block = block.superblock
         handle = gdb.parse_and_eval(args.view)['m_map']['m_impl_handle'] 
-        dog = gdb.parse_and_eval("printData((void*)"+str(handle)+")")
+        gdb.parse_and_eval("(void)printData((void*)"+str(handle)+")")
         #view = gdb.parse_and_eval(args.view)
         #r = self.parseRanges(args.ranges)
         #arr = view2NumpyArray(view)[r]
