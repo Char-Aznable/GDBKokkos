@@ -10,6 +10,10 @@ import gdb
 from GDBKokkos.printView import(
     printView
     )
+from GDBKokkos.printViewMetadata import(
+    printViewMetadata
+    )
 
 # This registers our class to the gdb runtime at "source" time.
 printView()
+printViewMetadata()

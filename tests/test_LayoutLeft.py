@@ -33,8 +33,30 @@ cpp = f"""
     }}
 """
 
+cpp_tool = f"""
+    #include <Kokkos_Core.hpp>
+
+    void breakpoint() {{ return; }}
+
+    int main(int argc, char* argv[]) {{
+      Kokkos::initialize(argc,argv); {{
+      Kokkos::Tools::pushRegion("region_1");
+      Kokkos::View<float*> left("left",1);
+      Kokkos::Tools::pushRegion("region_2");
+      Kokkos::View<float*> right("right",1);
+
+      Kokkos::deep_copy(left,right);
+
+      breakpoint();
+      Kokkos::Tools::popRegion();
+      Kokkos::Tools::popRegion();
+      }} Kokkos::finalize();
+
+    }}
+"""
+
 def testLayout(generateCMakeProject, runGDB):
-    p, _, fTest = generateCMakeProject
+    p, _, fTest, _ = generateCMakeProject
     fGDB = p.join("testLayout.gdbinit")
     r, resultStr = runGDB(
         """
@@ -60,7 +82,7 @@ def testLayout(generateCMakeProject, runGDB):
 
 
 def testExtent(generateCMakeProject, runGDB):
-    p, _, fTest = generateCMakeProject
+    p, _, fTest, _ = generateCMakeProject
     fGDB = p.join("testExtent.gdbinit")
     r, resultStr = runGDB(
         """
@@ -87,7 +109,7 @@ def testExtent(generateCMakeProject, runGDB):
 
 
 def testStrides(generateCMakeProject, runGDB):
-    p, _, fTest = generateCMakeProject
+    p, _, fTest, _ = generateCMakeProject
     fGDB = p.join("testExtent.gdbinit")
     r, resultStr = runGDB(
         """
@@ -117,7 +139,7 @@ def testStrides(generateCMakeProject, runGDB):
 
 
 def testTraits(generateCMakeProject, runGDB):
-    p, _, fTest = generateCMakeProject
+    p, _, fTest, _ = generateCMakeProject
     fGDB = p.join("testTraits.gdbinit")
     r, resultStr = runGDB(
         """
@@ -144,7 +166,7 @@ def testTraits(generateCMakeProject, runGDB):
 
 
 def testValueType(generateCMakeProject, runGDB):
-    p, _, fTest = generateCMakeProject
+    p, _, fTest, _ = generateCMakeProject
     fGDB = p.join("testValueType.gdbinit")
     r, resultStr = runGDB(
         """
@@ -171,7 +193,7 @@ def testValueType(generateCMakeProject, runGDB):
 
 
 def testSpan(generateCMakeProject, runGDB):
-    p, _, fTest = generateCMakeProject
+    p, _, fTest, _ = generateCMakeProject
     fGDB = p.join("testSpan.gdbinit")
     r, resultStr = runGDB(
         """
@@ -198,7 +220,7 @@ def testSpan(generateCMakeProject, runGDB):
 
 
 def testPrintView(generateCMakeProject, runGDB):
-    p, _, fTest = generateCMakeProject
+    p, _, fTest, _ = generateCMakeProject
     fGDB = p.join("testPrintView.gdbinit")
     r, resultStr = runGDB(
         """
@@ -225,3 +247,30 @@ def testPrintView(generateCMakeProject, runGDB):
     assert (result == expected).all(),\
         f"printView gives wrong view of shape {tuple}: {r.stdout}. Expected:\n"\
         f"{expected}"
+
+def testToolLibrary(generateCMakeProject, runGDB, generateToolLibrary):
+    p, _, _, fTestTools = generateCMakeProject
+    fGDB = p.join("testPrintView.gdbinit")
+    r, resultStr = runGDB(
+        """
+        py import GDBKokkos
+        set confirm off
+
+        b breakpoint()
+          commands
+            silent
+            frame 1
+          end
+
+        run
+
+        printViewMetadata left
+        quit
+
+        """,
+        fGDB, f"{fTestTools.realpath().strpath}", str(generateToolLibrary)
+        )
+
+    assert ("region_1" in resultStr),\
+        f"No regions printed in deep copy results"\
+        

@@ -10,6 +10,8 @@ import re
 import subprocess
 import pytest
 import textwrap
+import os
+import shutil
 
 @pytest.fixture(scope="module")
 def writeCPP(tmpdir_factory, request):
@@ -30,8 +32,27 @@ def writeCPP(tmpdir_factory, request):
     p = tmpdir_factory.mktemp(f"TestView{fnLayout}{fnShape}")
     fCXX = p.join("test.cpp")
     fCXX.write(textwrap.dedent(cpp))
+
+    cpp_tool = getattr(request.module, "cpp_tool", "")
+    fCXX2 = p.join("test_tools.cpp")
+    fCXX2.write(textwrap.dedent(cpp_tool))
+
     yield (p, fCXX)
 
+@pytest.fixture(scope="module")
+def generateToolLibrary(tmpdir_factory, request):
+    p = tmpdir_factory.mktemp("TestTool")
+    srcpath = request.config.rootdir.join("ToolExtensions").join("kp_gdb_extension.cpp")
+    makefilepath = request.config.rootdir.join("ToolExtensions").join("Makefile")
+    libpath = request.config.rootdir.join("ToolExtensions").join("kp_gdb_extension.so")
+    shutil.copy(srcpath, str(p))
+    shutil.copy(makefilepath, str(p))
+    with p.as_cwd():
+        cmdMake = [f"make"
+                    ]
+        rCmake = subprocess.run(cmdMake, shell=True, capture_output=True,
+                                encoding='utf-8')
+    yield (p.join("kp_gdb_extension.so"))
 
 @pytest.fixture(scope="module")
 def generateCMakeProject(writeCPP):
@@ -67,7 +88,7 @@ def generateCMakeProject(writeCPP):
     fBuildDir = p.mkdir("build")
     with fBuildDir.as_cwd():
         cmdCmake = [f"cmake {fCMakeLists.dirpath().strpath} "
-                    f"-DCMAKE_CXX_COMPILER=x86_64-conda-linux-gnu-g++ "
+                    f"-DCMAKE_CXX_COMPILER=g++ "
                     f"-DCMAKE_CXX_STANDARD=14 "
                     f"-DCMAKE_CXX_FLAGS='-DDEBUG -O0 -g' "
                     f"-DCMAKE_VERBOSE_MAKEFILE=ON "
@@ -80,21 +101,26 @@ def generateCMakeProject(writeCPP):
                                encoding='utf-8')
         assert rMake.returncode == 0, f"Error with running make: {rMake.stderr}"
     fTest = fBuildDir.join("test")
-    yield (p, fBuildDir, fTest)
+    fTestTools = fBuildDir.join("test_tools")
+    yield (p, fBuildDir, fTest, fTestTools)
 
 
 @pytest.fixture
 def runGDB():
-    def _runGDB(content : str, fPath, executable : str):
+    def _runGDB(content : str, fPath, executable : str, toolLibrary=None):
         fPath.write(textwrap.dedent(content))
-        cmd = [f"gdb -batch "
+        cmd = [f"/home/dzpolia/src/spack/opt/spack/spack_path_placeholder/spack_path_placeholder/spack_path_placeholder/spack_path_placeholder/sp/linux-rhel7-skylake_avx512/gcc-10.2.0/gdb-9.2-c3eoeva76lojz5bh7mdsqq4qnqkqq7qu/bin/gdb -batch "
                f"{executable} "
                f"-x {fPath.realpath().strpath}"
                ]
+        new_env = os.environ
+        if toolLibrary is not None:
+          new_env["KOKKOS_PROFILE_LIBRARY"] = toolLibrary
         r = subprocess.run(cmd,
                            shell=True,
                            capture_output=True,
-                           encoding='utf-8'
+                           encoding='utf-8',
+			   env=new_env
                            )
         assert r.returncode == 0,f"GDB error: {r.stderr}"
         # Get the output from GDB since the last breakpoint mark
