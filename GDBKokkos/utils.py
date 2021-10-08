@@ -193,9 +193,12 @@ def pointer2numpy(addr : int, t : gdb.Type, span : int, shape : tuple,
         "of np.dtype failed."
 
     # create a gdb.Value representing the array, i.e., arr.type == T[span]
+    # arr = gdb.parse_and_eval(f"*(({T.name} *){addr})@{span}")
     # TODO: to support CUDA global memory space array, use something like:
     # arr = gdb.parse_and_eval(f"*((@global {T.name} *){addr})@{span}")
-    arr = gdb.parse_and_eval(f"*(({T.name} *){addr})@{span}")
+    # or create the buffer with
+    # buffer = gdb.selected_inferior().read_memory(f"(@global {T.name} *){addr}", sizeTotal)
+    buffer = gdb.selected_inferior().read_memory(addr, sizeTotal)
     # copy the array over
     # This is equivlant to 
     # aTmp = np.array([arr[i] for i in range(span)], dtype=dtype)
@@ -204,9 +207,7 @@ def pointer2numpy(addr : int, t : gdb.Type, span : int, shape : tuple,
     # direct byte copying here
     # TODO: render the memory directly into a ndarray view so that we don't have
     # to copy the content over
-    aTmp = np.frombuffer(
-        bytearray(gdb.selected_inferior().read_memory(addr, sizeTotal)),
-        dtype=dtype)
+    aTmp = np.frombuffer(buffer, dtype=dtype)
 
     # Convert the span into np.ndarray taking into account strides
     arrayAPIDict = aTmp.__array_interface__.copy()
@@ -226,4 +227,6 @@ def pointer2numpy(addr : int, t : gdb.Type, span : int, shape : tuple,
             self.__array_interface__ = arrayAPIDict
 
     holder = ArrayHolder()
+    # The buffer will be garbage collected once we leave the scope so we need to
+    # copy the content over
     return np.array(holder, copy=True)
