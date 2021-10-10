@@ -231,9 +231,16 @@ class printView(gdb.Command):
         if np.asarray(arr.shape).size <= 1:
             print(arr)
         else:
-            idx = pd.MultiIndex.from_product([ np.arange(dim) for dim in arr.shape[:-1] ],
-                                             names=[f"Dim{iDim}" for iDim in range(len(arr.shape)-1)])
-            df = pd.DataFrame(arr.reshape(-1, arr.shape[-1])).set_index(idx)
+            idx = pd.MultiIndex.from_product(
+                [ np.arange(dim) for dim in arr.shape[:-1] ],
+                names=[f"Dim{iDim}" for iDim in range(len(arr.shape)-1)])
+            if arr.dtype.names is None:
+                # This is n numeric array
+                df = pd.DataFrame(arr.reshape(-1, arr.shape[-1])).set_index(idx)
+            else:
+                # This is a structured array
+                df = pd.DataFrame.from_records(
+                    arr.reshape(-1, arr.shape[-1]).tolist()).set_index(idx)
             with pd.option_context('display.max_seq_items', None,
                                    'display.max_rows', 99999,
                                    'display.max_colwidth', 2000,
