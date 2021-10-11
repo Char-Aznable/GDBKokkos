@@ -22,7 +22,8 @@ def getKokkosViewExtent(view : gdb.Value):
 
     Args:
         view (gdb.Value): Input Kokkos::View
-    Returns: np.ndarray of the view's extents
+    Returns: np.ndarray of the view's extents and np.ndarray of whether a
+    dimension is dynamic (1) or static (0)
     """
     # This is the ViewDimension class as template argumnet to ViewMapping
     # whose template parameters in turn indicate the size of the static view dimension
@@ -30,6 +31,7 @@ def getKokkosViewExtent(view : gdb.Value):
     viewDimName = view['m_map']['m_impl_offset'].type.template_argument(0).name
     # for the dynamic dimension, get the size from ViewDimension::D0, ::D1, ...
     extents = np.array(re.findall(r'\d+', viewDimName)).astype(int)
+    isDynamic = np.zeros_like(extents).astype(int)
     # There is the special case of extents being of size 0, which is a
     # specialization for ViewDimension<>, which indicates the view is a scalar
     # view (rank 0 view). In this case, we return an array of zero size
@@ -37,7 +39,8 @@ def getKokkosViewExtent(view : gdb.Value):
         if extents[iDim] > 0:
             continue
         extents[iDim] = view['m_map']['m_impl_offset']['m_dim'][f"N{iDim}"]
-    return extents
+        isDynamic[iDim] = 1
+    return extents, isDynamic
 
 
 def getKokkosViewLayout(view : gdb.Value):
@@ -86,13 +89,35 @@ def getKokkosViewStrides(view : gdb.Value):
         else:
             raise TypeError(f"Can't get strides from type {Tstrides.name}")
 
-    # if the view doesn't have stride then return None
+    extents, isDynamic = getKokkosViewExtent(view)
+    layout = getKokkosViewLayout(view)
+
+    # if the view doesn't have stride
     if mStride is None:
-        return None
+
+        # There is nothing we can use to figure out the strides for LayoutStride
+        # when we can't access m_stride
+        assert layout != "Kokkos::LayoutStride",\
+            f"View {str(view)} has layout stride it has no m_stride member"
+
+        # Here, view must be LayoutLeft or LayoutRight
+        # Something must has gone wrong if a view with dynamic dimension doesn't
+        # have a m_stride member
+        assert not isDynamic.any(),\
+            f"View {str(view)} has dynamic dimensions but no m_stride member"
+
+        # Here we can safely compute the strides for all-static rank view
+        aStrides = np.ones(extents.size, dtype=int)
+        if layout.name == "Kokkos::LayoutRight":
+            aStrides[1:] = extents[::-1][:-1]
+            aStrides = np.cumprod(aStrides)[::-1]
+        elif layout.name == "Kokkos::LayoutLeft":
+            aStrides[1:] = extents[:-1]
+            aStrides = np.cumprod(aStrides)
+
+        return aStrides
 
     # then parse the strides for each dimension
-    extents = getKokkosViewExtent(view)
-    layout = getKokkosViewLayout(view)
     if layout.name == "Kokkos::LayoutRight":
         assert mStride.size == 1,\
             f"Can't handle other than 1 stride in layout {layout.name}"
@@ -149,7 +174,7 @@ def getKokkosViewSpan(view : gdb.Value):
 
     """
     strides = getKokkosViewStrides(view)
-    extents = getKokkosViewExtent(view)
+    extents, _ = getKokkosViewExtent(view)
     if strides is None:
         # If extents.size == 0, this will return 1, according to
         # https://numpy.org/doc/stable/reference/generated/numpy.prod.html
@@ -176,7 +201,7 @@ def view2NumpyArray(view : gdb.Value):
         raise RuntimeError(f"Don't know how to handle view of type {View.name}")
 
     data = view['m_map']['m_impl_handle']
-    extents = getKokkosViewExtent(view)
+    extents, _ = getKokkosViewExtent(view)
     strides = getKokkosViewStrides(view)
     dType = getKokkosViewValueType(view)
     span = getKokkosViewSpan(view)
