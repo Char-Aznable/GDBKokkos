@@ -118,7 +118,7 @@ def generateViewTypes(request):
             # Kokkos::LayoutStride. As far as I can tell, the layout ctor needs
             # input for all ranks even if the static ranks have implicit extents
             # already specified in the type
-            stride = np.array([1, 3, 15])
+            stride = np.array([4, 1, 15])
             ctorStride = ",".join(
                 map(str, [ i for t in zip(shape, stride) for i in t ]))
             ctor = f"{layout}({ctorStride})"
