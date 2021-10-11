@@ -205,28 +205,10 @@ def pointer2numpy(addr : int, t : gdb.Type, span : int, shape : tuple,
     # for simple dtype. For more complex type with nested structure, the
     # element-wise copying would involve nested loops and is less favored to
     # direct byte copying here
-    # TODO: render the memory directly into a ndarray view so that we don't have
-    # to copy the content over
-    aTmp = np.frombuffer(buffer, dtype=dtype)
+    aTmp = np.frombuffer(buffer, dtype=dtype).copy()
+    ans = np.lib.stride_tricks.as_strided(
+        aTmp,
+        shape=shape, strides=np.asarray(strides) * sizeT,
+        writeable=False)
 
-    # Convert the span into np.ndarray taking into account strides
-    arrayAPIDict = aTmp.__array_interface__.copy()
-    arrayAPIDict['shape'] = shape
-    # when there exist padding bytes resulting from alignment, e.g., in the case
-    # of T is some struct, arrayAPIDict.descr can have fields corresponding to
-    # the padded bytes shown as something like ('', '|V3'), which will mess up
-    # the final array rendering. The simple solution to remove these padded
-    # bytes is to recycle the typestr here
-    arrayAPIDict['descr'] = dtype
-    if strides is not None:
-        aStrides = np.asarray(strides) * sizeT
-        arrayAPIDict['strides'] = tuple(aStrides)
-
-    class ArrayHolder():
-        def __init__(self):
-            self.__array_interface__ = arrayAPIDict
-
-    holder = ArrayHolder()
-    # The buffer will be garbage collected once we leave the scope so we need to
-    # copy the content over
-    return np.array(holder, copy=True)
+    return ans
