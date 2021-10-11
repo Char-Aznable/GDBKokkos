@@ -50,13 +50,23 @@ def initCMakeProject(tmpdir_factory):
 @pytest.fixture(scope="module")
 def generateViewTypes(request):
     cppTemplate = getattr(request.module, "cpp", "")
-    layouts = ["Kokkos::LayoutRight", "Kokkos::LayoutLeft",
+    layoutsInput = ["Kokkos::LayoutRight", "Kokkos::LayoutLeft",
                "Kokkos::LayoutStride"]
+    valueTypesInput = ["int", "long", "unsigned int", "unsigned long", "float",
+                       "double"]
+    typeCombo = (layoutsInput, valueTypesInput)
+    types = pd.DataFrame(
+        np.array(np.meshgrid(*typeCombo)).T.reshape(-1, len(typeCombo)),
+        columns=["layout", "valueType"])
     shape = np.array(getattr(request.module, "shape", (3, 4, 5)))
+    layouts = []
+    valueTypes = []
     cpps = []
     strides = []
     shapes = []
-    for layout in layouts:
+    for _, row in types.iterrows():
+        layout = row["layout"]
+        valueType = row["valueType"]
         ctor = ""
         stride = np.ones_like(shape, dtype=int)
         # Compute the expected stride and ctor arguments for the view
@@ -77,13 +87,18 @@ def generateViewTypes(request):
                 map(str, [ i for t in zip(shape, stride) for i in t ]))
             ctor = f"{layout}({ctorStride})"
         # Set the C++ template parameter for layout
-        cpp = re.sub(r"/\*TestViewLayoutTparam\*/", layout, cppTemplate)
+        cpp = re.sub(r"/\*TestViewLayoutTparam\*/", str(layout), cppTemplate)
+        # Set the view's value type
+        cpp = re.sub(r"/\*TestViewValueType\*/", str(valueType), cpp)
         # Set the ctor for the view defining the shape and stride
         cpp = re.sub(r"/\*TestViewLayoutCtor\*/", ctor, cpp)
+        layouts.append(layout)
+        valueTypes.append(valueType)
         cpps.append(cpp)
         strides.append(stride)
         shapes.append(shape)
-    ans = pd.DataFrame({"cpp" : cpps, "layout" : layouts, "stride" : strides,
+    ans = pd.DataFrame({"cpp" : cpps, "layout" : layouts,
+                        "valueType" : valueTypes, "stride" : strides,
                         "shape" : shapes })
     yield ans
 
@@ -96,10 +111,12 @@ def writeCPP(initCMakeProject, generateViewTypes):
     for _, row in cppSources.iterrows():
         cpp = row["cpp"]
         layout = row["layout"]
+        valueType = row["valueType"]
         shape = row["shape"]
         fnShape = "-".join(map(str, shape))
         fnLayout = re.sub(r"::", "", layout)
-        fcpp = p.join(f"testView{fnLayout}{fnShape}.cpp")
+        fnValueType = re.sub(r"\s+", "", valueType)
+        fcpp = p.join(f"testView{fnValueType}{fnLayout}{fnShape}.cpp")
         fcpp.write(textwrap.dedent(cpp))
         fcpps.append(fcpp)
     cppSources.insert(1, "fcpp", fcpps)

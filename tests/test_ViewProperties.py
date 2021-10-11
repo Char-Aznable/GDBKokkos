@@ -15,14 +15,16 @@ cpp = f"""
 
     void breakpoint() {{ return; }}
 
+    using T = /*TestViewValueType*/;
+
     int main(int argc, char* argv[]) {{
       Kokkos::initialize(argc,argv); {{
 
-      Kokkos::View<float***, /*TestViewLayoutTparam*/> v("v",
+      Kokkos::View<T***, /*TestViewLayoutTparam*/> v("v",
         /*TestViewLayoutCtor*/);
 
       Kokkos::parallel_for(v.span(), KOKKOS_LAMBDA (const int i)
-        {{ *(v.data()+i) = i; }});
+        {{ *(v.data()+i) = static_cast<T>(i); }});
 
       breakpoint();
 
@@ -127,6 +129,7 @@ def testTraits(compileCPP, runGDB):
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         layout = row["layout"]
+        valueType = row["valueType"]
         fGDB = p.join(fTest.purebasename + "_TestTraits.gdbinit")
         r, resultStr = runGDB(
             """
@@ -137,7 +140,7 @@ def testTraits(compileCPP, runGDB):
             """,
             fGDB, f"{fTest.realpath().strpath}"
             )
-        assert resultStr == f"Kokkos::ViewTraits<float***, {layout}>",\
+        assert resultStr == f"Kokkos::ViewTraits<{valueType}***, {layout}>",\
             "Wrong output traits: {r.stdout}"
 
 
@@ -145,6 +148,7 @@ def testValueType(compileCPP, runGDB):
     p, cppSources = compileCPP
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
+        valueType = row["valueType"]
         fGDB = p.join(fTest.purebasename + "_TestValueType.gdbinit")
         r, resultStr = runGDB(
             """
@@ -155,8 +159,14 @@ def testValueType(compileCPP, runGDB):
             """,
             fGDB, f"{fTest.realpath().strpath}"
             )
-        assert resultStr == f"float",\
+        assert resultStr == valueType,\
             "Wrong output ValueType: {r.stdout}"
+
+
+def viewValueType2NumpyDtype(valueType):
+    ans = {"int" : "|i4", "long" : "|i8", "unsigned int" : "|u4",
+           "unsigned long"  : "|u8", "float" : "|f4", "double" : "|f8"}
+    return ans[valueType]
 
 
 def testPrintView(compileCPP, runGDB):
@@ -166,6 +176,7 @@ def testPrintView(compileCPP, runGDB):
         fGDB = p.join(fTest.purebasename + "_TestPrintView.gdbinit")
         stride = row["stride"]
         layout = row["layout"]
+        valueType = row["valueType"]
         r, resultStr = runGDB(
             """
             py import GDBKokkos
@@ -174,11 +185,11 @@ def testPrintView(compileCPP, runGDB):
             """,
             fGDB, f"{fTest.realpath().strpath}"
             )
-
-        result = np.array(resultStr.split()).astype(float).reshape(shape)
+        dtype = viewValueType2NumpyDtype(valueType)
+        result = np.array(resultStr.split(), dtype=dtype).reshape(shape)
         iMax = stride.argmax()
         span = shape[iMax] * stride[iMax]
-        expected = np.arange(span).astype(float)
+        expected = np.arange(span).astype(dtype)
         if layout == "Kokkos::LayoutRight":
             expected = expected.reshape(shape, order="C")
         elif layout == "Kokkos::LayoutLeft":
