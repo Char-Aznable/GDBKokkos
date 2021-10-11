@@ -9,18 +9,19 @@
 import re
 import numpy as np
 
-shape = (3, 4, 5)
+shape = [3, 4, 5]
 cpp = f"""
     #include <Kokkos_Core.hpp>
 
     void breakpoint() {{ return; }}
 
     using T = /*TestViewValueType*/;
+    using Tarr = T/*TestViewArrExtents*/;
 
     int main(int argc, char* argv[]) {{
       Kokkos::initialize(argc,argv); {{
 
-      Kokkos::View<T***, /*TestViewLayoutTparam*/> v("v",
+      Kokkos::View<Tarr, /*TestViewLayoutTparam*/> v("v"
         /*TestViewLayoutCtor*/);
 
       Kokkos::parallel_for(v.span(), KOKKOS_LAMBDA (const int i)
@@ -53,6 +54,7 @@ def testLayout(compileCPP, runGDB):
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         fGDB = p.join(fTest.purebasename + "_TestLayout.gdbinit")
+        print(f"fTest = {fTest} fGDB = {fGDB}\n")
         r, resultStr = runGDB(
             """
             py from GDBKokkos.printView import getKokkosViewLayout
@@ -70,11 +72,12 @@ def testExtent(compileCPP, runGDB):
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         fGDB = p.join(fTest.purebasename + "_TestExtent.gdbinit")
+        print(f"fTest = {fTest} fGDB = {fGDB}\n")
         r, resultStr = runGDB(
             """
             py from GDBKokkos.printView import getKokkosViewExtent
             py v = gdb.parse_and_eval("v")
-            py print(getKokkosViewExtent(v))
+            py print(getKokkosViewExtent(v)[0])
 
             """,
             fGDB, f"{fTest.realpath().strpath}"
@@ -90,6 +93,7 @@ def testSpan(compileCPP, runGDB):
         stride = row["stride"]
         shape = row["shape"]
         fGDB = p.join(fTest.purebasename + "_TestSpan.gdbinit")
+        print(f"fTest = {fTest} fGDB = {fGDB}\n")
         r, resultStr = runGDB(
             """
             py from GDBKokkos.printView import getKokkosViewSpan
@@ -110,6 +114,7 @@ def testStrides(compileCPP, runGDB):
         fTest = row["fTest"]
         stride = row["stride"]
         fGDB = p.join(fTest.purebasename + "_TestStrides.gdbinit")
+        print(f"fTest = {fTest} fGDB = {fGDB}\n")
         r, resultStr = runGDB(
             """
             py from GDBKokkos.printView import getKokkosViewStrides
@@ -129,8 +134,9 @@ def testTraits(compileCPP, runGDB):
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         layout = row["layout"]
-        valueType = row["valueType"]
+        arrayType = row["arrayType"]
         fGDB = p.join(fTest.purebasename + "_TestTraits.gdbinit")
+        print(f"fTest = {fTest} fGDB = {fGDB}\n")
         r, resultStr = runGDB(
             """
             py from GDBKokkos.printView import getKokkosViewTraits
@@ -140,7 +146,11 @@ def testTraits(compileCPP, runGDB):
             """,
             fGDB, f"{fTest.realpath().strpath}"
             )
-        assert resultStr == f"Kokkos::ViewTraits<{valueType}***, {layout}>",\
+        # Remove space to prevent choking on type alias
+        # but add back the space after 'unsigned' keyword
+        resultStr = re.sub(r"\s+", "", resultStr)
+        resultStr = re.sub(r"unsigned", "unsigned ", resultStr)
+        assert resultStr == f"Kokkos::ViewTraits<{arrayType},{layout}>",\
             "Wrong output traits: {r.stdout}"
 
 
@@ -150,6 +160,7 @@ def testValueType(compileCPP, runGDB):
         fTest = row["fTest"]
         valueType = row["valueType"]
         fGDB = p.join(fTest.purebasename + "_TestValueType.gdbinit")
+        print(f"fTest = {fTest} fGDB = {fGDB}\n")
         r, resultStr = runGDB(
             """
             py from GDBKokkos.printView import getKokkosViewValueType
@@ -177,6 +188,7 @@ def testPrintView(compileCPP, runGDB):
         stride = row["stride"]
         layout = row["layout"]
         valueType = row["valueType"]
+        print(f"fTest = {fTest} fGDB = {fGDB}\n")
         r, resultStr = runGDB(
             """
             py import GDBKokkos
