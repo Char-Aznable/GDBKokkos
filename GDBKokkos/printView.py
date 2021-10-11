@@ -226,7 +226,9 @@ class printView(gdb.Command):
                             help="Ranges for each of the dimension. Default to\
                             print the entire view")
         parser.add_argument("--noIndex", action='store_true', default=False,
-                            help="Do not show the rank indices when printing the view")
+                            help="Do not show the rank indices when printing\
+                            the view. This will render a multidimensional array\
+                            into a multi-line string in a right-layout fashion")
         return parser.parse_args(inputArgs.split())
 
     def parseRanges(self, ranges : list):

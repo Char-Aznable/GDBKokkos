@@ -8,12 +8,37 @@
 # Distributed under terms of the 3-clause BSD license.
 import re
 import numpy as np
+import ast
 
 shape = [3, 4, 5]
+nameStruct = "Nested"
+cppStruct = f"""
+    struct Inner {{
+      long i_[2];
+      bool b_[2];
+      float f_[2];
+    }};
+
+    struct {nameStruct} {{
+      KOKKOS_INLINE_FUNCTION {nameStruct}() = default;
+      KOKKOS_INLINE_FUNCTION {nameStruct}(const int i)
+        :a_{{{{i,i}}, {{i > 0, i > 0}}, {{i / 1.f, i / 1.f}}}}
+        ,i_{{i}}
+        ,d_{{i / 1.}}
+        {{}}
+      Inner a_;
+      int i_;
+      double d_;
+    }};
+    """
+dtypeStruct = [('a_', [('i_', '|i8', 2), ('b_', '|b1', 2), ('f_', '|f4', 2)]),
+               ('i_', '|i4'), ('d_', '|f8')]
 cpp = f"""
     #include <Kokkos_Core.hpp>
 
     void breakpoint() {{ return; }}
+
+    /*TestViewStruct*/
 
     using T = /*TestViewValueType*/;
     using Tarr = T/*TestViewArrExtents*/;
@@ -176,7 +201,8 @@ def testValueType(compileCPP, runGDB):
 
 def viewValueType2NumpyDtype(valueType):
     ans = {"int" : "|i4", "long" : "|i8", "unsigned int" : "|u4",
-           "unsigned long"  : "|u8", "float" : "|f4", "double" : "|f8"}
+           "unsigned long"  : "|u8", "float" : "|f4", "double" : "|f8",
+           nameStruct : dtypeStruct}
     return ans[valueType]
 
 
@@ -197,8 +223,23 @@ def testPrintView(compileCPP, runGDB):
             """,
             fGDB, f"{fTest.realpath().strpath}"
             )
-        dtype = viewValueType2NumpyDtype(valueType)
-        result = np.array(resultStr.split(), dtype=dtype).reshape(shape)
+        dtype = np.dtype(viewValueType2NumpyDtype(valueType))
+        # Process the result into numpy array. The '--noIndex' option render the
+        # multidimensional array as layout-right multi-line string and we parse
+        # that string into shaped array
+        if dtype.names is None:
+            # just split the string into array for simple numeric type
+            result = np.array(resultStr.split(), dtype=dtype).reshape(shape)
+        else:
+            # need to trim off whitespaces and convert to list of tuples for
+            # nested structured type
+            resultStr = re.sub(r"\n", " ", resultStr)
+            resultStr = re.sub(r"^\s+", "", resultStr)
+            resultStr = re.sub(r"\)\s+\(", "), (", resultStr)
+            l = list(ast.literal_eval(resultStr))
+            result = np.array(l, dtype=dtype).reshape(shape)
+        # Get the expected array by reshaping np.arange(span) taking into
+        # account stride
         iMax = stride.argmax()
         span = shape[iMax] * stride[iMax]
         expected = np.arange(span).astype(dtype)

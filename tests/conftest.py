@@ -50,10 +50,14 @@ def initCMakeProject(tmpdir_factory):
 @pytest.fixture(scope="module")
 def generateViewTypes(request):
     cppTemplate = getattr(request.module, "cpp", "")
+    nameStruct = getattr(request.module, "nameStruct", "")
+    cppStruct = getattr(request.module, "cppStruct", "")
+    # Replace the nested struct definition in the template
+    cppTemplate = re.sub(r"/\*TestViewStruct\*/", cppStruct, cppTemplate)
     layoutsInput = ["Kokkos::LayoutRight", "Kokkos::LayoutLeft",
                "Kokkos::LayoutStride"]
     valueTypesInput = ["int", "long", "unsigned int", "unsigned long", "float",
-                       "double"]
+                       "double", nameStruct]
     nRanksTotal = 3
     nDynamicRanksInput = np.arange(nRanksTotal + 1)
     typeCombo = (layoutsInput, valueTypesInput, nDynamicRanksInput)
