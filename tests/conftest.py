@@ -83,13 +83,13 @@ def initCMakeProject():
             assert os.path.exists(str(fTest)), f"{fTest} doesn't exist"
             assert os.access(str(fTest), os.X_OK), f"{fTest} is not executable"
             fTests.append(fTest)
-        cppSources.insert(2, "fTest", fTests)
+        cppSources.insert(0, "fTest", fTests)
         yield cppSources
     return _initCMakeProject
 
 
 @pytest.fixture(scope="module")
-def generateViewTypes(request):
+def generateSourceView(request):
     """Modify input C++ template with different combination of view element
     types, view layouts and static/dynamic ranks
 
@@ -197,22 +197,22 @@ def generateViewTypes(request):
 
 
 @pytest.fixture(scope="module")
-def compileTestView(tmpdir_factory, initCMakeProject, generateViewTypes):
+def compileTestView(tmpdir_factory, initCMakeProject, generateSourceView):
     """Fixture to set up the CMake project and compile the C++ code for testing
     the functions in GDBKokkos for examining Kokkos::View
 
 
     Args:
-        tmpdir_factory
-        initCMakeProject
-        generateViewTypes
+        tmpdir_factory : Fixture for generating temporary directory
+        initCMakeProject : Fixture for setting up CMake project
+        generateSourceView : Fixture for generating C++ code for test cases
     Returns: tuple of: LocalPath of the CMake project directory, pd.DataFrame of
     the test cases
     """
     p = tmpdir_factory.mktemp(f"testGDBKokkosView")
     proj = initCMakeProject(p)
     next(proj)
-    cppSources = generateViewTypes
+    cppSources = generateSourceView
     fcpps = []
     for _, row in cppSources.iterrows():
         cpp = row["cpp"]
@@ -228,7 +228,33 @@ def compileTestView(tmpdir_factory, initCMakeProject, generateViewTypes):
         fcpp = p.join(f"testView{fnArrayType}{fnLayout}{fnShape}.cpp")
         fcpp.write(textwrap.dedent(cpp))
         fcpps.append(fcpp)
-    cppSources.insert(1, "fcpp", fcpps)
+    cppSources.insert(0, "fcpp", fcpps)
+    cppSources = proj.send(cppSources)
+    return p, cppSources
+
+
+@pytest.fixture(scope="module")
+def generateSourceUnorderedMap(request):
+    cppTemplate = getattr(request.module, "cpp", "")
+    cpps = [cppTemplate]
+    ans = pd.DataFrame({"cpp" : cpps})
+    return ans
+
+
+@pytest.fixture(scope="module")
+def compileTestUnorderedMap(tmpdir_factory, initCMakeProject,
+                            generateSourceUnorderedMap):
+    p = tmpdir_factory.mktemp(f"testGDBKokkosUnorderedMap")
+    proj = initCMakeProject(p)
+    next(proj)
+    cppSources = generateSourceUnorderedMap
+    fcpps = []
+    for _, row in cppSources.iterrows():
+        cpp = row["cpp"]
+        fcpp = p.join(f"testUnorderedMap.cpp")
+        fcpp.write(textwrap.dedent(cpp))
+        fcpps.append(fcpp)
+    cppSources.insert(0, "fcpp", fcpps)
     cppSources = proj.send(cppSources)
     return p, cppSources
 
