@@ -3,7 +3,7 @@
 # vim:fenc=utf-8
 #
 # Copyright 2020 Char Aznable <aznable.char.0083@gmail.com>
-# Description: Utilities for pretty-printing Kokkos::View
+# Description: setup for GDBKokkos release and install
 #
 # Distributed under terms of the 3-clause BSD license.
 import setuptools
@@ -11,7 +11,7 @@ import setuptools
 setuptools.setup(
     name="GDBKokkos",
     python_requires=">=3.8.10",
-    version="0.0.3",
+    version="0.1.0",
     description="GDB python modules for debugging Kokkos",
     long_description="see https://github.com/Char-Aznable/GDBKokkos",
     long_description_content_type="text/markdown",
