@@ -250,6 +250,15 @@ class printView(gdb.Command):
         view = gdb.parse_and_eval(args.view)
         r = self.parseRanges(args.ranges)
         arr = view2NumpyArray(view)[r]
+        if not args.noIndex:
+            # Print the view type traits
+            extents, _ = getKokkosViewExtent(view)
+            strides = getKokkosViewStrides(view)
+            dType = getKokkosViewValueType(view)
+            span = getKokkosViewSpan(view)
+            layout = getKokkosViewLayout(view)
+            print(f"# span: {span}; extents: {extents}; strides: {strides}; "
+                  f"layout: {layout.name}; type: {dType}\n")
         if np.asarray(arr.shape).size <= 1:
             print(arr)
         else:
