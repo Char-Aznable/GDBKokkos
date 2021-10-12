@@ -74,8 +74,8 @@ gdbinit = f"""
     quit
     """
 
-def testLayout(compileCPP, runGDB):
-    p, cppSources = compileCPP
+def testLayout(compileTestView, runGDB):
+    p, cppSources = compileTestView
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         fGDB = p.join(fTest.purebasename + "_TestLayout.gdbinit")
@@ -92,8 +92,8 @@ def testLayout(compileCPP, runGDB):
         assert resultStr == row["layout"], f"Wrong output layout: {r.stdout}"
 
 
-def testExtent(compileCPP, runGDB):
-    p, cppSources = compileCPP
+def testExtent(compileTestView, runGDB):
+    p, cppSources = compileTestView
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         fGDB = p.join(fTest.purebasename + "_TestExtent.gdbinit")
@@ -111,8 +111,8 @@ def testExtent(compileCPP, runGDB):
         assert (result == np.array(shape)).all(), f"Wrong output extent: {r.stdout}"
 
 
-def testSpan(compileCPP, runGDB):
-    p, cppSources = compileCPP
+def testSpan(compileTestView, runGDB):
+    p, cppSources = compileTestView
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         stride = row["stride"]
@@ -133,8 +133,8 @@ def testSpan(compileCPP, runGDB):
         assert int(resultStr) == expected, "Wrong output Span: {r.stdout}"
 
 
-def testStrides(compileCPP, runGDB):
-    p, cppSources = compileCPP
+def testStrides(compileTestView, runGDB):
+    p, cppSources = compileTestView
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         stride = row["stride"]
@@ -154,8 +154,8 @@ def testStrides(compileCPP, runGDB):
         assert (result == expected).all(), f"Wrong output strides: {r.stdout}"
 
 
-def testTraits(compileCPP, runGDB):
-    p, cppSources = compileCPP
+def testTraits(compileTestView, runGDB):
+    p, cppSources = compileTestView
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         layout = row["layout"]
@@ -179,8 +179,8 @@ def testTraits(compileCPP, runGDB):
             "Wrong output traits: {r.stdout}"
 
 
-def testValueType(compileCPP, runGDB):
-    p, cppSources = compileCPP
+def testValueType(compileTestView, runGDB):
+    p, cppSources = compileTestView
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         valueType = row["valueType"]
@@ -206,8 +206,8 @@ def viewValueType2NumpyDtype(valueType):
     return ans[valueType]
 
 
-def testPrintView(compileCPP, runGDB):
-    p, cppSources = compileCPP
+def testPrintView(compileTestView, runGDB):
+    p, cppSources = compileTestView
     for _, row in cppSources.iterrows():
         fTest = row["fTest"]
         fGDB = p.join(fTest.purebasename + "_TestPrintView.gdbinit")

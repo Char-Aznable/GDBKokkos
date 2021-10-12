@@ -12,43 +12,94 @@ import subprocess
 import pytest
 import textwrap
 import pandas as pd
+import os
+from py._path.local import LocalPath
 
 @pytest.fixture(scope="session")
-def initCMakeProject(tmpdir_factory):
-    p = tmpdir_factory.mktemp(f"testGDBKokkos")
-    fCMakeLists = p.join("CMakeLists.txt")
-    fCMakeLists.write(textwrap.dedent(
+def initCMakeProject():
+    """Initialize a CMake project to compile the test code
+    """
+    def _initCMakeProject(p : LocalPath):
+        """Generator to set up the CMake project directory, to take in C++
+        source files and to compile the C++ source files.
+
+
+        Args:
+            p (LocalPath): Input path to the CMake project
+        Returns: pd.DataFrame containing the column "fTest" of compiled test
+        executables
         """
-        cmake_minimum_required(VERSION 3.14)
-        project(testGDBKokkos CXX)
-        include(FetchContent)
+        fCMakeLists = p.join("CMakeLists.txt")
+        fCMakeLists.write(textwrap.dedent(
+            """
+            cmake_minimum_required(VERSION 3.14)
+            project(testGDBKokkos CXX)
+            include(FetchContent)
 
-        FetchContent_Declare(
-          kokkos
-          GIT_REPOSITORY https://github.com/kokkos/kokkos.git
-          GIT_TAG        origin/develop
-          GIT_SHALLOW 1
-          GIT_PROGRESS ON
-        )
+            FetchContent_Declare(
+              kokkos
+              GIT_REPOSITORY https://github.com/kokkos/kokkos.git
+              GIT_TAG        origin/develop
+              GIT_SHALLOW 1
+              GIT_PROGRESS ON
+            )
 
-        FetchContent_MakeAvailable(kokkos)
+            FetchContent_MakeAvailable(kokkos)
 
-        aux_source_directory(${CMAKE_CURRENT_LIST_DIR} testSources)
+            aux_source_directory(${CMAKE_CURRENT_LIST_DIR} testSources)
 
-        foreach(testSource ${testSources})
-          get_filename_component(testBinary ${testSource} NAME_WE)
-          add_executable(${testBinary} ${testSource})
-          target_include_directories(${testBinary} PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-          target_link_libraries(${testBinary} kokkos)
-          add_test(NAME ${testBinary} COMMAND ${testBinary})
-        endforeach()
-        """
-        ))
-    yield p
+            foreach(testSource ${testSources})
+              get_filename_component(testBinary ${testSource} NAME_WE)
+              add_executable(${testBinary} ${testSource})
+              target_include_directories(${testBinary} PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+              target_link_libraries(${testBinary} kokkos)
+              add_test(NAME ${testBinary} COMMAND ${testBinary})
+            endforeach()
+            """
+            ))
+        cppSources = yield
+        assert isinstance(cppSources, pd.DataFrame),\
+            f"Need pd.DataFrame to continue compilation"
+        fBuildDir = p.mkdir("build")
+        with fBuildDir.as_cwd():
+            cmdCmake = [f"cmake {str(p)} "
+                        f"-DCMAKE_CXX_COMPILER=x86_64-conda-linux-gnu-g++ "
+                        f"-DCMAKE_CXX_STANDARD=14 "
+                        f"-DCMAKE_CXX_FLAGS='-DDEBUG -O0 -g' "
+                        f"-DCMAKE_VERBOSE_MAKEFILE=ON "
+                        ]
+            rCmake = subprocess.run(cmdCmake, shell=True, capture_output=True,
+                                    encoding="utf-8")
+            assert rCmake.returncode == 0, f"Error with running cmake: {rCmake.stderr}"
+            cmdMake = [f"make -j"]
+            rMake = subprocess.run(cmdMake, shell=True, capture_output=True,
+                                   encoding="utf-8")
+            assert rMake.returncode == 0, f"Error with running make: {rMake.stderr}"
+        # Get the executables
+        fTests = []
+        for _, row in cppSources.iterrows():
+            fcpp = row["fcpp"]
+            fTest = fBuildDir.join(str(fcpp.purebasename))
+            assert os.path.exists(str(fTest)), f"{fTest} doesn't exist"
+            assert os.access(str(fTest), os.X_OK), f"{fTest} is not executable"
+            fTests.append(fTest)
+        cppSources.insert(2, "fTest", fTests)
+        yield cppSources
+    return _initCMakeProject
 
 
 @pytest.fixture(scope="module")
 def generateViewTypes(request):
+    """Modify input C++ template with different combination of view element
+    types, view layouts and static/dynamic ranks
+
+
+    Args:
+        request : Pytest fixture to request input C++ template files
+    Returns: pd.DataFrame of the instances of the test cases with information
+    about their view element types, view layouts and static/dynamic ranks in
+    different columns
+    """
     cppTemplate = getattr(request.module, "cpp", "")
     nameStruct = getattr(request.module, "nameStruct", "")
     cppStruct = getattr(request.module, "cppStruct", "")
@@ -146,8 +197,21 @@ def generateViewTypes(request):
 
 
 @pytest.fixture(scope="module")
-def writeCPP(initCMakeProject, generateViewTypes):
-    p = initCMakeProject
+def compileTestView(tmpdir_factory, initCMakeProject, generateViewTypes):
+    """Fixture to set up the CMake project and compile the C++ code for testing
+    the functions in GDBKokkos for examining Kokkos::View
+
+
+    Args:
+        tmpdir_factory
+        initCMakeProject
+        generateViewTypes
+    Returns: tuple of: LocalPath of the CMake project directory, pd.DataFrame of
+    the test cases
+    """
+    p = tmpdir_factory.mktemp(f"testGDBKokkosView")
+    proj = initCMakeProject(p)
+    next(proj)
     cppSources = generateViewTypes
     fcpps = []
     for _, row in cppSources.iterrows():
@@ -165,42 +229,31 @@ def writeCPP(initCMakeProject, generateViewTypes):
         fcpp.write(textwrap.dedent(cpp))
         fcpps.append(fcpp)
     cppSources.insert(1, "fcpp", fcpps)
-    yield p, cppSources
-
-
-@pytest.fixture(scope="module")
-def compileCPP(writeCPP):
-    p, cppSources = writeCPP
-    fBuildDir = p.mkdir("build")
-    with fBuildDir.as_cwd():
-        cmdCmake = [f"cmake {str(p)} "
-                    f"-DCMAKE_CXX_COMPILER=x86_64-conda-linux-gnu-g++ "
-                    f"-DCMAKE_CXX_STANDARD=14 "
-                    f"-DCMAKE_CXX_FLAGS='-DDEBUG -O0 -g' "
-                    f"-DCMAKE_VERBOSE_MAKEFILE=ON "
-                    ]
-        rCmake = subprocess.run(cmdCmake, shell=True, capture_output=True,
-                                encoding="utf-8")
-        assert rCmake.returncode == 0, f"Error with running cmake: {rCmake.stderr}"
-        cmdMake = [f"make -j"]
-        rMake = subprocess.run(cmdMake, shell=True, capture_output=True,
-                               encoding="utf-8")
-        assert rMake.returncode == 0, f"Error with running make: {rMake.stderr}"
-    # Get the executables
-    fTests = []
-    for _, row in cppSources.iterrows():
-        fcpp = row["fcpp"]
-        print(fcpp)
-        fTest = fcpp.purebasename
-        fTests.append(fBuildDir.join(str(fTest)))
-    cppSources.insert(2, "fTest", fTests)
-    yield p, cppSources
+    cppSources = proj.send(cppSources)
+    return p, cppSources
 
 
 @pytest.fixture(scope="function")
 def runGDB(request):
+    """Fixture to run GDB for test case
+
+
+    Args:
+        request : Pytest fixture for requesting input GDB script template
+    Returns: function to call gdb and capture its return
+    """
     content = getattr(request.module, "gdbinit", "")
-    def _runGDB(gdbComms : str, fPath, executable : str):
+    def _runGDB(gdbComms : str, fPath : LocalPath, executable : str):
+        """Modify input GDB script template and run GDB
+
+
+        Args:
+            gdbComms (str): Input GDBKokkos commands to be run
+            fPath (LocalPath): Path to store the GDB scripts
+            executable (str): Test executable to be loaded into GDB
+        Returns: tuple of: return code from the GDB process, output from the
+        GDBKokkos commands
+        """
         nonlocal content
         content = re.sub(r"/\*TestGDBComms\*/", gdbComms, content)
         fPath.write(textwrap.dedent(content))
