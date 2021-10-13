@@ -387,6 +387,28 @@ Kokkos::initialize(argc,argv); {
 4  ([1, 1],)  ([2, 3],)
 ```
 
+For complicated key and value type with nested structure, the option
+`--flatten` can flatten out the nested structure:
+
+```gdb
+(gdb) py import GDBKokkos
+(gdb) printUnorderedMap m --flatten
+      Key   Value
+0  [3, 3]  [6, 7]
+1  [2, 2]  [4, 5]
+2  [0, 0]  [0, 1]
+3  [4, 4]  [8, 9]
+4  [1, 1]  [2, 3]
+
+```
+Another option `--hideTypes` can take a list of python type string so that
+element of the key and value that is instance of these types in the list will
+be removed. For example `printUnorderedMap --hideTypes bytes bool` will remove
+the byte string and boolean members from any nested struct in the key and value
+type. This helps the user to focus on certain aspect of the keys and values by
+ignoring auxiliary information. For a complete list of command line options, use
+`printUnorderedMap -h`.
+
 One can also get the keys and values from the UnorderedMap as numpy array using:
 
 ```gdb
