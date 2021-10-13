@@ -65,8 +65,6 @@ def arithmeticType2NumpyDtype(t : gdb.Type):
 
     T = gdb.types.get_basic_type(t)
 
-    assert T.code != gdb.TYPE_CODE_STRUCT, f"Input {str(t)} is not arithmetic type"
-
     # parse array
     span = None
     if T.code == gdb.TYPE_CODE_ARRAY:
@@ -81,10 +79,17 @@ def arithmeticType2NumpyDtype(t : gdb.Type):
         gdb.TYPE_CODE_BOOL : f"|b{sizeT}",
         }
 
+    if not T.code in typeCode2TypeStr:
+        # This is likely some other types that can't be rendered into numpy
+        # array so we just render it into string. See
+        # https://github.com/bminor/binutils-gdb/blob/777b054cf93ad2525b891ea15bbf8d5cd6a56339/gdb/gdbtypes.h#L95
+        # for the list of gdb type code
+        return (f"|S{sizeT}", span)
+
     return (typeCode2TypeStr[T.code], span)
 
 
-def struct2dtype(T : gdb.Type):
+def struct2dtype(T : gdb.Type, depth : int = 0, depthMax : int = 3):
     """Convert a gdb.Type to a list of np.dtype with potentially nested struct
 
     Nested struct are parsed as what would appear in a numpy structured array
@@ -92,6 +97,10 @@ def struct2dtype(T : gdb.Type):
 
     Args:
         T (gdb.Type): Input type to be parsed
+        depth (int): Current recursion depth of calling this function
+        depthMax (int): Maximal allowed recursion depth into the nested struct.
+        Any struct or class below this level will be treated as byte string of
+        the same size as the struct
     Returns: list [name, np.dtype]
     """
     assert T.code == gdb.TYPE_CODE_STRUCT, f"Input type {str(T)} is not struct"
@@ -99,16 +108,16 @@ def struct2dtype(T : gdb.Type):
     ans = []
     for f in foreachMemberOfClass(T):
         name = f.name
-        t = f.type
-        if t.code == gdb.TYPE_CODE_STRUCT:
-            ans.append((name, struct2dtype(t)))
+        t = gdb.types.get_basic_type(f.type)
+        if t.code == gdb.TYPE_CODE_STRUCT and depth < depthMax:
+            ans.append((name, struct2dtype(t, depth + 1, depthMax)))
         else:
             dtype, span = arithmeticType2NumpyDtype(t)
             ans.append((name, dtype) if span is None else (name, dtype, span))
     return ans
 
 
-def type2dtype(T : gdb.Type):
+def type2dtype(T : gdb.Type, depthMax : int = 3):
     """Convert input gdb.Type to np.dtype
 
     For simple scalar type, this will return a single string of np.dtype
@@ -120,6 +129,9 @@ def type2dtype(T : gdb.Type):
 
     Args:
         T (gdb.Type): Input type
+        depthMax (int): Maximal allowed recursion depth into the nested struct.
+        Any struct or class below this level will be treated as byte string of
+        the same size as the struct
     Returns: str or list of np.dtype
     """
 
@@ -131,7 +143,7 @@ def type2dtype(T : gdb.Type):
         # this is a struct, potentially nested. we first flatten out the nested
         # structs and create a numpy structured array using the fields in the
         # flatten struct
-        dtypes = struct2dtype(T)
+        dtypes = struct2dtype(T, 0, depthMax)
     else:
         dtype, span = arithmeticType2NumpyDtype(T)
         if span is None:
@@ -160,7 +172,7 @@ def foreachBaseType(T : gdb.Type):
 
 
 def pointer2numpy(addr : int, t : gdb.Type, span : int, shape : tuple,
-                  strides : tuple = None):
+                  strides : tuple = None, depthMax : int = 3):
     """Create a numpy array from given memory address, type and span
 
     Args:
@@ -171,6 +183,9 @@ def pointer2numpy(addr : int, t : gdb.Type, span : int, shape : tuple,
         shape (tuple): The shape of the output array
         strides (tuple) : strides of each dimension of the array in the unit of
         number of elements
+        depthMax (int): Maximal allowed recursion depth into the nested struct.
+        Any struct or class below this level will be treated as byte string of
+        the same size as the struct
 
     Returns: np.ndarray representing the given memory chunk
 
@@ -182,15 +197,15 @@ def pointer2numpy(addr : int, t : gdb.Type, span : int, shape : tuple,
     sizeT = T.sizeof
     sizeTotal = span * sizeT
 
-    typestr = type2dtype(T)
+    typestr = type2dtype(T, depthMax)
     dtype = np.dtype(typestr, align=True)
 
     # in case the alignment assumption failed, e.g., due to the compiler, check
     # if the size of the type is consistent
     assert dtype.itemsize == sizeT,\
         f"np.dtype reports type {str(T)} has size {dtype.itemsize} but its "\
-        "actual size is {sizeT}. It's likely that the alignment assumption "\
-        "of np.dtype failed."
+        f"actual size is {sizeT}. It's likely that the alignment assumption "\
+        f"of np.dtype failed."
 
     # create a gdb.Value representing the array, i.e., arr.type == T[span]
     # arr = gdb.parse_and_eval(f"*(({T.name} *){addr})@{span}")

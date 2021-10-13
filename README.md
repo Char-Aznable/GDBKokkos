@@ -257,8 +257,6 @@ Kokkos::initialize(argc,argv); {
 ```gdb
 (gdb) printView v
 
-# span: 6; extents: [2 3]; strides: [1 2]; layout: Kokkos::LayoutLeft; type: T
-
                                                    0                                             1                                             2
 Dim0
 0     (([0, 0], [False, False], [0.0, 0.0]), 0, 0.0)  (([1, 1], [True, True], [1.0, 1.0]), 1, 1.0)  (([2, 2], [True, True], [2.0, 2.0]), 2, 2.0)
@@ -269,7 +267,11 @@ where the view is rendered as a [numpy structured
 array](https://numpy.org/doc/stable/user/basics.rec.html#structured-arrays). For
 nested struct or class as in the example, each level of nesting class will be
 represented as a level of tuple parenthesis. Array member of a class will be
-rendered as python list with brackets.
+rendered as python list with brackets. However, this is a default limit on how
+deep the recursion will go to pick up the nested struct in a view value type,
+which can be control by the `--depthMax` option of `printView`, which defaults
+to 3. Any struct nested below `depthMax` level will be rendered as byte string
+of the same size as the struct.
 
 ## Interoperation with python
 

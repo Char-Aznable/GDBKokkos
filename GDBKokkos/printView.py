@@ -183,12 +183,15 @@ def getKokkosViewSpan(view : gdb.Value):
         return (extents * strides).max()
 
 
-def view2NumpyArray(view : gdb.Value):
+def view2NumpyArray(view : gdb.Value, depthMax : int = 3):
     """Create numpy array from a Kokkos::View
 
 
     Args:
         view (gdb.Value): Input Kokkos::View
+        depthMax (int): Maximal allowed recursion depth into the nested struct.
+        Any struct or class below this level will be treated as byte string of
+        the same size as the struct
     Returns: np.ndarray representing the view
     """
     View = gdb.types.get_basic_type(view.type)
@@ -207,7 +210,8 @@ def view2NumpyArray(view : gdb.Value):
     span = getKokkosViewSpan(view)
 
     ans = pointer2numpy(data, dType, span, tuple(extents),
-                        None if strides is None else tuple(strides))
+                        None if strides is None else tuple(strides),
+                        depthMax)
     return ans
 
 
@@ -232,6 +236,11 @@ class printView(gdb.Command):
                             help="Do not show the rank indices when printing\
                             the view. This will render a multidimensional array\
                             into a multi-line string in a right-layout fashion")
+        parser.add_argument("--depthMax", type=int, default=3,
+                            help="Maximal allowed recursion depth into the\
+                            nested struct of view value type. Any struct or\
+                            class below this level will be treated as byte \
+                            string of the same size as the struct")
         return parser.parse_args(inputArgs.split())
 
     def parseRanges(self, ranges : list):
@@ -257,7 +266,7 @@ class printView(gdb.Command):
         args = self.parseArguments(inputArgs)
         view = gdb.parse_and_eval(args.view)
         r = self.parseRanges(args.ranges)
-        arr = view2NumpyArray(view)[r]
+        arr = view2NumpyArray(view, args.depthMax)[r]
         if args.viewTraits:
             # Print the view type traits
             extents, _ = getKokkosViewExtent(view)
