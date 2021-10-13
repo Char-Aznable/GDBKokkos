@@ -23,7 +23,8 @@ def getKokkosViewExtent(view : gdb.Value):
     Args:
         view (gdb.Value): Input Kokkos::View
     Returns: np.ndarray of the view's extents and np.ndarray of whether a
-    dimension is dynamic (1) or static (0)
+    dimension is dynamic (1) or static (0). In case of a scalar view, the
+    extents will be an empty array
     """
     # This is the ViewDimension class as template argumnet to ViewMapping
     # whose template parameters in turn indicate the size of the static view dimension
@@ -69,7 +70,8 @@ def getKokkosViewStrides(view : gdb.Value):
     Args:
         view (gdb.Value): TODO
 
-    Returns: a np.ndarray of strides or None if the view doesn't have stride
+    Returns: a np.ndarray of strides, which can be zero-sized when the view is
+    a scalar view
 
     """
 
@@ -109,6 +111,8 @@ def getKokkosViewStrides(view : gdb.Value):
         elif layout.name == "Kokkos::LayoutLeft":
             aStrides[1:] = extents[:-1]
             aStrides = np.cumprod(aStrides)
+        else:
+            raise TypeError(f"Can't handle Kokkos::View layout {layout.name}")
 
         return aStrides
 
@@ -170,8 +174,9 @@ def getKokkosViewSpan(view : gdb.Value):
     """
     strides = getKokkosViewStrides(view)
     extents, _ = getKokkosViewExtent(view)
-    if strides is None:
-        # If extents.size == 0, this will return 1, according to
+    if strides.size == 0:
+        # If extents.size == 0, i.e., view is a scalar view, this will return 1,
+        # according to
         # https://numpy.org/doc/stable/reference/generated/numpy.prod.html
         return np.prod(extents)
     else:

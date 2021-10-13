@@ -110,12 +110,18 @@ def generateSourceView(request):
     valueTypesInput = ["int", "long", "unsigned int", "unsigned long", "float",
                        "double", nameStruct]
     nRanksTotal = 3
-    nDynamicRanksInput = np.arange(nRanksTotal + 1)
+    # -1 indicate test for scalar view
+    nDynamicRanksInput = np.arange(-1, nRanksTotal + 1)
     typeCombo = (layoutsInput, valueTypesInput, nDynamicRanksInput)
     types = pd.DataFrame(
         np.array(np.meshgrid(*typeCombo)).T.reshape(-1, len(typeCombo)),
         columns=["layout", "valueType", "nDynamicRanks"])
     types['nDynamicRanks'] = types['nDynamicRanks'].astype(int)
+    # drop the scalar view cases for LayoutStride because the view can't be
+    # initialized. See https://github.com/kokkos/kokkos/issues/4401
+    types = types.drop(np.where(
+        (types['nDynamicRanks'] == -1) &
+        (types['layout'] == 'Kokkos::LayoutStride'))[0])
     shape = np.array(getattr(request.module, "shape", [3, 4, 5]))
 
     assert shape.size == nRanksTotal,\
@@ -149,30 +155,38 @@ def generateSourceView(request):
         valueType = row["valueType"]
         nDynamicRanks = row["nDynamicRanks"]
         nStaticRanks = nRanksTotal - nDynamicRanks
-        arrayExtents = str(arrayRanks['rankDynamic'][nDynamicRanks]) + \
-            str(arrayRanks['rankStatic'][nStaticRanks])
-        arrayType = valueType + arrayExtents
         ctor = ""
-        stride = np.ones_like(shape, dtype=int)
-        shapeDynamicRanks = shape[:nDynamicRanks]
-        # Compute the expected stride and ctor arguments for the view
-        if layout == "Kokkos::LayoutRight":
-            stride[1:] = shape[::-1][:-1]
-            stride = np.cumprod(stride)[::-1]
-            ctor = ",".join(map(str, shapeDynamicRanks))
-        elif layout == "Kokkos::LayoutLeft":
-            stride[1:] = shape[:-1]
-            stride = np.cumprod(stride)
-            ctor = ",".join(map(str, shapeDynamicRanks))
-        elif layout == "Kokkos::LayoutStride":
-            # For testing purpose, we fix the stride in the case of
-            # Kokkos::LayoutStride. As far as I can tell, the layout ctor needs
-            # input for all ranks even if the static ranks have implicit extents
-            # already specified in the type
-            stride = np.array([4, 1, 15])
+        iShape = shape.copy()
+        if nDynamicRanks == -1:
+            arrayExtents = ""
+            stride = np.array([], dtype=int)
+            iShape = np.array([], dtype=int)
+            shapeDynamicRanks = np.array([], dtype=int)
+        else:
+            arrayExtents = str(arrayRanks['rankDynamic'][nDynamicRanks]) + \
+                str(arrayRanks['rankStatic'][nStaticRanks])
+            stride = np.ones_like(iShape, dtype=int)
+            shapeDynamicRanks = iShape[:nDynamicRanks]
+            # Compute the expected stride and ctor arguments for the view
+            if layout == "Kokkos::LayoutRight":
+                stride[1:] = iShape[::-1][:-1]
+                stride = np.cumprod(stride)[::-1]
+            elif layout == "Kokkos::LayoutLeft":
+                stride[1:] = iShape[:-1]
+                stride = np.cumprod(stride)
+            elif layout == "Kokkos::LayoutStride":
+                # For testing purpose, we fix the stride in the case of
+                # Kokkos::LayoutStride. As far as I can tell, the layout ctor needs
+                # input for all ranks even if the static ranks have implicit extents
+                # already specified in the type
+                stride = np.array([4, 1, 15])
+        if layout == "Kokkos::LayoutStride":
             ctorStride = ",".join(
-                map(str, [ i for t in zip(shape, stride) for i in t ]))
+                map(str, [ i for t in zip(iShape, stride) for i in t ]))
             ctor = f"{layout}({ctorStride})"
+        else:
+            ctor = ",".join(map(str, shapeDynamicRanks))
+        arrayType = valueType + arrayExtents
         # Set the C++ template parameter for layout
         cpp = re.sub(r"/\*TestViewLayoutTparam\*/", str(layout), cppTemplate)
         # Set the view's value type
@@ -187,7 +201,7 @@ def generateSourceView(request):
         arrayTypes.append(arrayType)
         cpps.append(cpp)
         strides.append(stride)
-        shapes.append(shape)
+        shapes.append(iShape)
     ans = pd.DataFrame({"cpp" : cpps, "layout" : layouts,
                         "valueType" : valueTypes,
                         "nDynamicRanks" : types["nDynamicRanks"],

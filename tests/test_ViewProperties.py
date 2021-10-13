@@ -108,7 +108,7 @@ def testExtent(compileTestView, runGDB):
             fGDB, f"{fTest.realpath().strpath}"
             )
         result = np.array(re.sub(r"\D+", " ", resultStr).split(), dtype=int)
-        assert (result == np.array(shape)).all(), f"Wrong output extent: {r.stdout}"
+        assert (result == row["shape"]).all(), f"Wrong output extent: {r.stdout}"
 
 
 def testSpan(compileTestView, runGDB):
@@ -128,8 +128,12 @@ def testSpan(compileTestView, runGDB):
             """,
             fGDB, f"{fTest.realpath().strpath}"
             )
-        iMax = stride.argmax()
-        expected = shape[iMax] * stride[iMax]
+        if row["nDynamicRanks"] == -1:
+            # This is a scalar view
+            expected = 1
+        else:
+            iMax = stride.argmax()
+            expected = shape[iMax] * stride[iMax]
         assert int(resultStr) == expected, "Wrong output Span: {r.stdout}"
 
 
@@ -214,6 +218,7 @@ def testPrintView(compileTestView, runGDB):
         stride = row["stride"]
         layout = row["layout"]
         valueType = row["valueType"]
+        shape = row["shape"]
         print(f"fTest = {fTest} fGDB = {fGDB}\n")
         r, resultStr = runGDB(
             """
@@ -237,11 +242,18 @@ def testPrintView(compileTestView, runGDB):
             resultStr = re.sub(r"^\s+", "", resultStr)
             resultStr = re.sub(r"\)\s+\(", "), (", resultStr)
             l = list(ast.literal_eval(resultStr))
+            if shape.size == 0:
+                # this is a scalar view so l is a list but we need a tuple
+                l = tuple(l)
             result = np.array(l, dtype=dtype).reshape(shape)
         # Get the expected array by reshaping np.arange(span) taking into
         # account stride
-        iMax = stride.argmax()
-        span = shape[iMax] * stride[iMax]
+        if stride.size > 0:
+            iMax = stride.argmax()
+            span = shape[iMax] * stride[iMax]
+        else:
+            # This is a scalar view
+            span = 1
         expected = np.arange(span).astype(dtype)
         if layout == "Kokkos::LayoutRight":
             expected = expected.reshape(shape, order="C")
@@ -253,5 +265,5 @@ def testPrintView(compileTestView, runGDB):
                 strides=stride * expected.dtype.itemsize,
                 writeable=False)
         assert (result == expected).all(),\
-            f"printView gives wrong view of shape {tuple}: {r.stdout}. Expected:\n"\
+            f"printView gives wrong view of shape {shape}: {r.stdout}. Expected:\n"\
             f"{expected}"
