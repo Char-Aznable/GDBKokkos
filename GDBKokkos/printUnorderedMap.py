@@ -143,8 +143,8 @@ class printUnorderedMap(gdb.Command):
 
         if args.flatten:
             n = len(keys)
-            keys = np.array(flattenNested(keys)).reshape(n, -1)
-            vals = np.array(flattenNested(vals)).reshape(n, -1)
+            keys = np.array(flattenNested(keys)).reshape(n, -1).tolist()
+            vals = np.array(flattenNested(vals)).reshape(n, -1).tolist()
 
         # Convert to dataframe
         # NOTE: as of Pandas version 1.2.4, Python 3.8.10 and GDB 9.2, passing
@@ -155,7 +155,7 @@ class printUnorderedMap(gdb.Command):
         mVals = m["m_values"]
         TKey = getKokkosViewValueType(mKeys)
         TVal = getKokkosViewValueType(mVals)
-        df = pd.DataFrame({str(TKey) : keys.tolist(), str(TVal) : vals.tolist()})
+        df = pd.DataFrame({str(TKey) : keys, str(TVal) : vals})
         with pd.option_context('display.max_seq_items', None,
                                'display.max_rows', 99999,
                                'display.max_colwidth', 2000,
