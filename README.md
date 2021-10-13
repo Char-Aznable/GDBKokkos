@@ -409,6 +409,19 @@ type. This helps the user to focus on certain aspect of the keys and values by
 ignoring auxiliary information. For a complete list of command line options, use
 `printUnorderedMap -h`.
 
+The option `--sortKeys` can sort the output by the keys in the map, provided
+that the options `--hideTypes bytes` and `--flatten` are given:
+```gdb
+(gdb) py import GDBKokkos
+(gdb) printUnorderedMap m --flatten --hideTypes bytes --sortKeys 
+      Key   Value
+2  [0, 0]  [0, 1]
+4  [1, 1]  [2, 3]
+1  [2, 2]  [4, 5]
+0  [3, 3]  [6, 7]
+3  [4, 4]  [8, 9]
+```
+
 One can also get the keys and values from the UnorderedMap as numpy array using:
 
 ```gdb

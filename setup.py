@@ -11,7 +11,7 @@ import setuptools
 setuptools.setup(
     name="GDBKokkos",
     python_requires=">=3.8.10",
-    version="0.1.0",
+    version="0.1.1",
     description="GDB python modules for debugging Kokkos",
     long_description="see https://github.com/Char-Aznable/GDBKokkos",
     long_description_content_type="text/markdown",
