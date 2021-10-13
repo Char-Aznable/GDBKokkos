@@ -16,8 +16,8 @@ cpp = f"""
 
     void breakpoint() {{ return; }}
 
-    struct Key {{ int k_[4]; }};
-    struct Value {{ int v_[2]; }};
+    using Key = int;
+    using Value = float;
 
     using Map = Kokkos::UnorderedMap<Key, Value>;
 
@@ -27,7 +27,7 @@ cpp = f"""
       Map m(100);
 
       Kokkos::parallel_for(10, KOKKOS_LAMBDA (const int i)
-        {{ m.insert(Key{{i, i, i, i}}, Value{{i + 1, i + 1}}); }});
+        {{ m.insert(Key{{i}}, Value{{(i + 1) / 1.}}); }});
 
       breakpoint();
 
@@ -74,28 +74,6 @@ def testGetMapValidIndices(compileTestUnorderedMap, runGDB):
             f"Number of valid indices exceeds map capacity: {r.stdout}"
 
 
-def parsePrintUnorderedMapOutput(s : str):
-    s = re.sub(r"\n", " ", s)
-    s = re.sub(r"^\s+", "", s)
-    s = re.sub(r"\)\s+\(", "), (", s)
-    l = list(ast.literal_eval(s))
-    ans = []
-    for i in range(len(l)):
-        if i % 2:
-            # odd index is value
-            iKey = i - 1
-            iVal = i
-        else:
-            # odd index is value
-            iKey = i
-            iVal = i + 1
-        val = np.array(l[iVal][0])
-        key = np.array(l[iKey][0])
-        ans.append((key, val))
-    return ans
-
-
-
 def testGetMapKeysVals(compileTestUnorderedMap, runGDB):
     p, cppSources = compileTestUnorderedMap
     for _, row in cppSources.iterrows():
@@ -114,12 +92,8 @@ def testGetMapKeysVals(compileTestUnorderedMap, runGDB):
             """,
             fGDB, f"{fTest.realpath().strpath}"
             )
-        d = parsePrintUnorderedMapOutput(resultStr)
-        for key, val in d:
-            print(f"{key} -> {val}\n")
-            assert (val == val[0]).all(), f"Wrong values: {r.stdout}"
-            assert (key == key[0]).all(), f"Wrong keys: {r.stdout}"
-            assert val[0] == key[0] + 1, f"Wrong keys - vals: {r.stdout}"
+        d = np.array(resultStr.split(), dtype=float).reshape(-1, 2)
+        assert (d[:, 1] == d[:, 0] + 1).all(), f"Wrong keys - vals: {d} {r.stdout}"
 
 
 def testPrintUnorderedMap(compileTestUnorderedMap, runGDB):
@@ -137,9 +111,5 @@ def testPrintUnorderedMap(compileTestUnorderedMap, runGDB):
             """,
             fGDB, f"{fTest.realpath().strpath}"
             )
-        d = parsePrintUnorderedMapOutput(resultStr)
-        for key, val in d:
-            print(f"{key} -> {val}\n")
-            assert (val == val[0]).all(), f"Wrong values: {r.stdout}"
-            assert (key == key[0]).all(), f"Wrong keys: {r.stdout}"
-            assert val[0] == key[0] + 1, f"Wrong keys - vals: {r.stdout}"
+        d = np.array(resultStr.split(), dtype=float).reshape(-1, 2)
+        assert (d[:, 1] == d[:, 0] + 1).all(), f"Wrong keys - vals: {d} {r.stdout}"
