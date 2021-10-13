@@ -83,8 +83,29 @@ Then you can use the `printView` GDB command to print a view. For example:
 # print the entire views 
 (gdb) printView v 
 ```
-This will shows the view `v` as well as its type traits in the header:
+This will shows the content of `v`:
 ```
+              0     1     2     3     4
+Dim0 Dim1                              
+0    0      0.0   1.0   2.0   3.0   4.0
+     1      5.0   6.0   7.0   8.0   9.0
+     2     10.0  11.0  12.0  13.0  14.0
+     3     15.0  16.0  17.0  18.0  19.0
+1    0     20.0  21.0  22.0  23.0  24.0
+     1     25.0  26.0  27.0  28.0  29.0
+     2     30.0  31.0  32.0  33.0  34.0
+     3     35.0  36.0  37.0  38.0  39.0
+2    0     40.0  41.0  42.0  43.0  44.0
+     1     45.0  46.0  47.0  48.0  49.0
+     2     50.0  51.0  52.0  53.0  54.0
+     3     55.0  56.0  57.0  58.0  59.0
+
+```
+where the first row is the index of the last dimension of `v` and the first two
+columns show the indices of the first two dimension. You can also ask
+`printView` to print the type traits of the view such as its span using:
+```gdb
+(gdb) printView v --viewTraits
 # span: 60; extents: [3 4 5]; strides: [20  5  1]; layout: Kokkos::LayoutRight; type: float
 
               0     1     2     3     4
@@ -103,8 +124,8 @@ Dim0 Dim1
      3     55.0  56.0  57.0  58.0  59.0
 
 ```
-where the first row is the index of the last dimension of `v` and the first two
-columns show the indices of the first two dimension. You can disable showing the indices using
+
+You can disable showing the indices using
 
 ```
 (gdb) printView v --noIndex
@@ -180,37 +201,17 @@ You can see the options description for `printView` by
 
 ```gdb
 (gdb) printView -h
-usage: [-h] [--noIndex] view [ranges [ranges ...]]
+usage: [-h] [--viewTraits] [--noIndex] view [ranges [ranges ...]]
 
 positional arguments:
-  view        Name of the view object
-    ranges      Ranges for each of the dimension. Default to print the entire view
+  view          Name of the view object
+  ranges        Ranges for each of the dimension. Default to print the entire view
 
-    optional arguments:
-      -h, --help  show this help message and exit
-        --noIndex   Do not show the rank indices when printing the view
-```
+optional arguments:
+  -h, --help    show this help message and exit
+  --viewTraits  Print the span, extents, shape and value type of the view
+  --noIndex     Do not show the rank indices when printing the view. This will render a multidimensional array into a multi-line string in a right-layout fashion
 
-### Get properties of Kokkos::View
-
-To use the utility python functions to get various properties of Kokkos::View, load the functions with:
-
-```gdb
-(gdb) py from GDBKokkos.printView import *
-```
-
-To get the layout, extent, strides and span of the Kokkos::View:
-
-```gdb
-(gdb) py v = gdb.parse_and_eval('v')
-(gdb) py print( getKokkosViewLayout(v) )
-Kokkos::LayoutRight
-(gdb) py print( getKokkosViewExtent(v) )
-[3 4 5]
-(gdb) py print( getKokkosViewStrides(v) )
-[20  5  1]
-(gdb) py print( getKokkosViewSpan(v) )
-60
 ```
 
 ### <a name="CustomType"></a> Support for user-defined view value type
@@ -296,6 +297,28 @@ To get the max over the class member `i_`, one can do:
 ```gdb
 (gdb) py print(varr['i_'].max())
 3
+```
+
+### Get properties of Kokkos::View
+
+To use the utility python functions to get various properties of Kokkos::View, load the functions with:
+
+```gdb
+(gdb) py from GDBKokkos.printView import *
+```
+
+To get the layout, extent, strides and span of the Kokkos::View:
+
+```gdb
+(gdb) py v = gdb.parse_and_eval('v')
+(gdb) py print( getKokkosViewLayout(v) )
+Kokkos::LayoutRight
+(gdb) py print( getKokkosViewExtent(v) )
+[3 4 5]
+(gdb) py print( getKokkosViewStrides(v) )
+[20  5  1]
+(gdb) py print( getKokkosViewSpan(v) )
+60
 ```
 
 ## Support for Kokkos::UnorderedMap

@@ -225,6 +225,9 @@ class printView(gdb.Command):
         parser.add_argument("ranges", type=int, nargs='*', default=[],
                             help="Ranges for each of the dimension. Default to\
                             print the entire view")
+        parser.add_argument("--viewTraits", action='store_true', default=False,
+                            help="Print the span, extents, shape and value type\
+                            of the view")
         parser.add_argument("--noIndex", action='store_true', default=False,
                             help="Do not show the rank indices when printing\
                             the view. This will render a multidimensional array\
@@ -255,7 +258,7 @@ class printView(gdb.Command):
         view = gdb.parse_and_eval(args.view)
         r = self.parseRanges(args.ranges)
         arr = view2NumpyArray(view)[r]
-        if not args.noIndex:
+        if args.viewTraits:
             # Print the view type traits
             extents, _ = getKokkosViewExtent(view)
             strides = getKokkosViewStrides(view)
