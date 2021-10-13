@@ -71,7 +71,7 @@ def initCMakeProject():
             rCmake = subprocess.run(cmdCmake, shell=True, capture_output=True,
                                     encoding="utf-8")
             assert rCmake.returncode == 0, f"Error with running cmake: {rCmake.stderr}"
-            cmdMake = [f"make -j"]
+            cmdMake = [f"make -j16"]
             rMake = subprocess.run(cmdMake, shell=True, capture_output=True,
                                    encoding="utf-8")
             assert rMake.returncode == 0, f"Error with running make: {rMake.stderr}"
