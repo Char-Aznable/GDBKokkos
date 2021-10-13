@@ -12,6 +12,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import pickle
+from collections.abc import Iterable
 from GDBKokkos.printView import (
     view2NumpyArray, getKokkosViewValueType)
 
@@ -54,12 +55,12 @@ def getMapKeysVals(m : gdb.Value, depthMax : int = 3):
     return keysValid, valsValid, capacity
 
 def removeByTypesFromNested(l, typesRemove : tuple):
-    """Remove items in the input iteratable l which are of one of the types in
+    """Remove items in the input iterable l which are of one of the types in
     typesRemove
 
 
     Args:
-        l : Input iteratable
+        l : Input iterable
         typesRemove (tuple): Input types to be removed
     Returns: Iteratable with all nested items of the types removed
     """
@@ -71,6 +72,29 @@ def removeByTypesFromNested(l, typesRemove : tuple):
     # clean up the empty sublists
     l = [ i for i in l if not isinstance(i, (list, tuple)) or len(i) > 0 ]
     return l
+
+
+def flattenNested(l):
+    """Flatten a nested iterable to a list
+
+    Element of the type np.void is also considered iterable due to how GDBKokkos
+    convert view value type to numpy structured array so np.void object will be
+    converted to tuple and flattened
+
+
+    Args:
+        l : Input iterable
+    Returns: list of elements with no nesting iterable
+    """
+    ans = []
+    for i in l:
+        if isinstance(i, Iterable):
+            ans.extend(flattenNested(i))
+        elif isinstance(i, np.void):
+            ans.extend(flattenNested(tuple(i)))
+        else:
+            ans.append(i)
+    return ans
 
 
 class printUnorderedMap(gdb.Command):
@@ -96,6 +120,8 @@ class printUnorderedMap(gdb.Command):
                             rendering difficult so one can remove\
                             the byte string before printing keys or values by\
                             passing to 'bytes' to this option")
+        parser.add_argument("--flatten", action='store_true', default=False,
+                            help="Flatten the nested struct of keys and vals")
         parser.add_argument("--depthMax", type=int, default=3,
                             help="Maximal allowed recursion depth into the\
                             nested struct of view value type. Any struct or\
@@ -115,6 +141,11 @@ class printUnorderedMap(gdb.Command):
             keys = removeByTypesFromNested(keys.tolist(), typesRemove)
             vals = removeByTypesFromNested(vals.tolist(), typesRemove)
 
+        if args.flatten:
+            n = len(keys)
+            keys = np.array(flattenNested(keys)).reshape(n, -1)
+            vals = np.array(flattenNested(vals)).reshape(n, -1)
+
         # Convert to dataframe
         # NOTE: as of Pandas version 1.2.4, Python 3.8.10 and GDB 9.2, passing
         # pd.DataFrame from python session to a gdb.Command results in garbage
@@ -124,7 +155,7 @@ class printUnorderedMap(gdb.Command):
         mVals = m["m_values"]
         TKey = getKokkosViewValueType(mKeys)
         TVal = getKokkosViewValueType(mVals)
-        df = pd.DataFrame({str(TKey) : keys, str(TVal) : vals})
+        df = pd.DataFrame({str(TKey) : keys.tolist(), str(TVal) : vals.tolist()})
         with pd.option_context('display.max_seq_items', None,
                                'display.max_rows', 99999,
                                'display.max_colwidth', 2000,
