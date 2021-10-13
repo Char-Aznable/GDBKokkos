@@ -122,6 +122,10 @@ class printUnorderedMap(gdb.Command):
                             passing to 'bytes' to this option")
         parser.add_argument("--flatten", action='store_true', default=False,
                             help="Flatten the nested struct of keys and vals")
+        parser.add_argument("--sortKeys", action='store_true', default=False,
+                            help="Sort the keys lexicographically. This only\
+                            works if '--hideTypes bytes' and '--flatten' are\
+                            given")
         parser.add_argument("--depthMax", type=int, default=3,
                             help="Maximal allowed recursion depth into the\
                             nested struct of view value type. Any struct or\
@@ -156,6 +160,10 @@ class printUnorderedMap(gdb.Command):
         TKey = getKokkosViewValueType(mKeys)
         TVal = getKokkosViewValueType(mVals)
         df = pd.DataFrame({str(TKey) : keys, str(TVal) : vals})
+
+        if "bytes" in args.hideTypes and args.flatten and args.sortKeys:
+            df = df.sort_values(by=[str(TKey)])
+
         with pd.option_context('display.max_seq_items', None,
                                'display.max_rows', 99999,
                                'display.max_colwidth', 2000,
