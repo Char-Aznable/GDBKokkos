@@ -6,12 +6,10 @@
 # Description: Utilities for pretty-printing Kokkos::UnorderedMap
 #
 # Distributed under terms of the 3-clause BSD license.
-import re
 import gdb
 import argparse
 import numpy as np
 import pandas as pd
-import pickle
 from collections.abc import Iterable
 from GDBKokkos.printView import (
     view2NumpyArray, getKokkosViewValueType)

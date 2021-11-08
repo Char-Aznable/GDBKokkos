@@ -11,7 +11,7 @@ import setuptools
 setuptools.setup(
     name="GDBKokkos",
     python_requires=">=3.8.10",
-    version="0.1.1",
+    version="0.2.0",
     description="GDB python modules for debugging Kokkos",
     long_description="see https://github.com/Char-Aznable/GDBKokkos",
     long_description_content_type="text/markdown",
@@ -28,6 +28,7 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         "numpy",
+        "scipy",
         "pandas",
     ],
     extras_require = {

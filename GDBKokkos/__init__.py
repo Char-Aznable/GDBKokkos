@@ -13,7 +13,11 @@ from GDBKokkos.printView import(
 from GDBKokkos.printUnorderedMap import(
     printUnorderedMap
     )
+from GDBKokkos.printCrsMatrix import(
+    printCrsMatrix
+    )
 
 # This registers our class to the gdb runtime at "source" time.
 printView()
 printUnorderedMap()
+printCrsMatrix()

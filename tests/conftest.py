@@ -19,19 +19,26 @@ from py._path.local import LocalPath
 def initCMakeProject():
     """Initialize a CMake project to compile the test code
     """
-    def _initCMakeProject(p : LocalPath):
+    def _initCMakeProject(p : LocalPath, buildKokkosKernel : bool = False):
         """Generator to set up the CMake project directory, to take in C++
         source files and to compile the C++ source files.
 
 
         Args:
             p (LocalPath): Input path to the CMake project
+            buildKokkosKernel (bool) : If set to True, will fetch KokkosKernels
+            and build the tests with it
         Returns: pd.DataFrame containing the column "fTest" of compiled test
         executables
         """
+        fetchKokkosKernels = ""
+        libKokkosKernels = ""
+        if buildKokkosKernel:
+            fetchKokkosKernels = "kokkos-kernels"
+            libKokkosKernels = "kokkoskernels"
         fCMakeLists = p.join("CMakeLists.txt")
         fCMakeLists.write(textwrap.dedent(
-            """
+            f"""
             cmake_minimum_required(VERSION 3.14)
             project(testGDBKokkos CXX)
             include(FetchContent)
@@ -44,16 +51,24 @@ def initCMakeProject():
               GIT_PROGRESS ON
             )
 
-            FetchContent_MakeAvailable(kokkos)
+            FetchContent_Declare(
+              kokkos-kernels
+              GIT_REPOSITORY https://github.com/kokkos/kokkos-kernels.git
+              GIT_TAG        origin/develop
+              GIT_SHALLOW 1
+              GIT_PROGRESS ON
+            )
 
-            aux_source_directory(${CMAKE_CURRENT_LIST_DIR} testSources)
+            FetchContent_MakeAvailable(kokkos {fetchKokkosKernels})
 
-            foreach(testSource ${testSources})
-              get_filename_component(testBinary ${testSource} NAME_WE)
-              add_executable(${testBinary} ${testSource})
-              target_include_directories(${testBinary} PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-              target_link_libraries(${testBinary} kokkos)
-              add_test(NAME ${testBinary} COMMAND ${testBinary})
+            aux_source_directory(${{CMAKE_CURRENT_LIST_DIR}} testSources)
+
+            foreach(testSource ${{testSources}})
+              get_filename_component(testBinary ${{testSource}} NAME_WE)
+              add_executable(${{testBinary}} ${{testSource}})
+              target_include_directories(${{testBinary}} PRIVATE ${{CMAKE_CURRENT_LIST_DIR}})
+              target_link_libraries(${{testBinary}} kokkos {libKokkosKernels})
+              add_test(NAME ${{testBinary}} COMMAND ${{testBinary}})
             endforeach()
             """
             ))
@@ -67,6 +82,7 @@ def initCMakeProject():
                         f"-DCMAKE_CXX_STANDARD=14 "
                         f"-DCMAKE_CXX_FLAGS='-DDEBUG -O0 -g' "
                         f"-DCMAKE_VERBOSE_MAKEFILE=ON "
+                        f"-DKokkosKernels_ADD_DEFAULT_ETI=OFF "
                         ]
             rCmake = subprocess.run(cmdCmake, shell=True, capture_output=True,
                                     encoding="utf-8")
@@ -266,6 +282,32 @@ def compileTestUnorderedMap(tmpdir_factory, initCMakeProject,
     for _, row in cppSources.iterrows():
         cpp = row["cpp"]
         fcpp = p.join(f"testUnorderedMap.cpp")
+        fcpp.write(textwrap.dedent(cpp))
+        fcpps.append(fcpp)
+    cppSources.insert(0, "fcpp", fcpps)
+    cppSources = proj.send(cppSources)
+    return p, cppSources
+
+
+@pytest.fixture(scope="module")
+def generateSourceCrsMatrix(request):
+    cppTemplate = getattr(request.module, "cpp", "")
+    cpps = [cppTemplate]
+    ans = pd.DataFrame({"cpp" : cpps})
+    return ans
+
+
+@pytest.fixture(scope="module")
+def compileTestCrsMatrix(tmpdir_factory, initCMakeProject,
+                         generateSourceCrsMatrix):
+    p = tmpdir_factory.mktemp(f"testGDBKokkosCrsMatrix")
+    proj = initCMakeProject(p, buildKokkosKernel=True)
+    next(proj)
+    cppSources = generateSourceCrsMatrix
+    fcpps = []
+    for _, row in cppSources.iterrows():
+        cpp = row["cpp"]
+        fcpp = p.join(f"testCrsMatrix.cpp")
         fcpp.write(textwrap.dedent(cpp))
         fcpps.append(fcpp)
     cppSources.insert(0, "fcpp", fcpps)

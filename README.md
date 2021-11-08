@@ -7,7 +7,22 @@
 
 Pretty printer for debugging Kokkos with the GNU Debugger (GDB)
 
-This is a python module to be used in GDB to examine `Kokkos::View` (https://github.com/kokkos/kokkos/wiki/View)
+This is a python module to be used in GDB to examine various data structure of
+[`Kokkos`](https://github.com/kokkos/kokkos) and
+[`Kokkos Kernels`](https://github.com/kokkos/kokkos-kernels).
+The following data structure can be pretty-printed in GDB via commands (see
+below) :
+
+- [Kokkos::View](https://github.com/kokkos/kokkos/wiki/View)
+    - Can pretty-print view content and traits including memory layout, stride and extents
+    - User-defined value types with nested structure are supported
+- [Kokkos::UnorderedMap](https://github.com/kokkos/kokkos/wiki/Unordered-Map)
+    - Can pretty-print key-value pairs
+- [KokkosSparse::CrsMatrix](https://github.com/kokkos/kokkos-kernels/wiki/CrsMatrix)
+    - Can pretty-print the sparse matrix in dense or COO format
+
+They can also be converted to the respective python data structure objects for
+interoperation, which can be useful for quickly verifying numerical results.
 
 ## Usage
 
@@ -435,6 +450,150 @@ One can also get the keys and values from the UnorderedMap as numpy array using:
 (gdb) py print(capacity)
 128
 ```
+
+## Support for KokkosSparse::CrsMatrix
+
+The `printCrsMatrix` command can print
+[KokkosSparse::CrsMatrix](https://github.com/kokkos/kokkos-kernels/wiki/CrsMatrix)
+in either dense matrix format or in COO sparse format. Consider this code:
+
+```c++
+#include <Kokkos_Core.hpp>
+#include <KokkosSparse_CrsMatrix.hpp>
+
+using HostExecutionSpace = Kokkos::DefaultHostExecutionSpace;
+using HostMemorySpace = HostExecutionSpace::memory_space;
+using HostDevice = Kokkos::Device<HostExecutionSpace, HostMemorySpace>;
+
+using M = typename KokkosSparse::CrsMatrix<float, int, HostDevice>;
+using RowMap = typename M::row_map_type::non_const_type;
+using ColIdx = typename M::index_type;
+using Values  = typename M::values_type;
+using O = typename RowMap::value_type;
+using I = typename ColIdx::value_type;
+using V = typename Values::value_type;
+
+void breakpoint() { return; }
+
+int main(int argc, char* argv[]) {
+  Kokkos::initialize(argc,argv); {
+
+  const int nCols = 6;
+  const int nRows = 4;
+  const O nnz = 8;
+  Kokkos::View<V*> vs("vs", nnz), vs1("vs1", nnz);;
+  Kokkos::View<O*> rs("rs", nRows + 1);
+  Kokkos::View<I*> cs("cs", nnz);
+
+  for(O i = 0; i < nnz; ++i) {
+    vs(i) = i + 1;
+    vs1(i) = vs(i) + 10;
+  }
+  rs(0) = 0;
+  rs(1) = 2;
+  rs(2) = 4;
+  rs(3) = 7;
+  rs(4) = 8;
+  cs(0) = 0;
+  cs(1) = 1;
+  cs(2) = 1;
+  cs(3) = 3;
+  cs(4) = 2;
+  cs(5) = 3;
+  cs(6) = 4;
+  cs(7) = 5;
+
+  /* matrix([[1, 2, 0, 0, 0, 0], */
+  /*         [0, 3, 0, 4, 0, 0], */
+  /*         [0, 0, 5, 6, 7, 0], */
+  /*         [0, 0, 0, 0, 0, 8]]) */
+  M m("m", nRows, nCols, nnz, vs, rs, cs);
+
+  breakpoint();
+
+  } Kokkos::finalize(); }
+```
+
+To print the content of the sparse matrix `m`, do:
+
+```gdb
+(gdb) py import GDBKokkos
+(gdb) printCrsMatrix m 
+# shape: (4, 6)
+
+[[1. 2. 0. 0. 0. 0.]
+ [0. 3. 0. 4. 0. 0.]
+ [0. 0. 5. 6. 7. 0.]
+ [0. 0. 0. 0. 0. 8.]]
+
+```
+To print `m` in COO format:
+```gdb
+(gdb) py import GDBKokkos
+(gdb) printCrsMatrix m --printCoo
+# shape: (4, 6)
+
+  (0, 0)	1.0
+  (0, 1)	2.0
+  (1, 1)	3.0
+  (1, 3)	4.0
+  (2, 2)	5.0
+  (2, 3)	6.0
+  (2, 4)	7.0
+  (3, 5)	8.0
+
+```
+Sometimes it would be helpful to examine the results of a sparse matrix
+algorithm where the sparsity pattern of `m` is used to hold another set of
+values such as `vs1` in the above example. To print `m`'s sparsity pattern with
+`vs1` as content:
+```gdb
+(gdb) py import GDBKokkos
+(gdb) printCrsMatrix m --values vs1
+# shape: (4, 6)
+
+[[11 12  0  0  0  0]
+ [ 0 13  0 14  0  0]
+ [ 0  0 15 16 17  0]
+ [ 0  0  0  0  0 18]]
+
+```
+
+The `CrsMatrix` can be converted to a `scipy.sparse.csr_matrix` object for numpy
+or scipy interoperation:
+
+```gdb
+(gdb) py from GDBKokkos.printCrsMatrix import crs2ScipySparse
+(gdb) py from GDBKokkos.printView import view2NumpyArray
+(gdb) py m = crs2ScipySparse(gdb.parse_and_eval("m"))
+(gdb) py print(m)
+  (0, 0)	1.0
+  (0, 1)	2.0
+  (1, 1)	3.0
+  (1, 3)	4.0
+  (2, 2)	5.0
+  (2, 3)	6.0
+  (2, 4)	7.0
+  (3, 5)	8.0
+(gdb) py print(m.toarray())
+[[1. 2. 0. 0. 0. 0.]
+ [0. 3. 0. 4. 0. 0.]
+ [0. 0. 5. 6. 7. 0.]
+ [0. 0. 0. 0. 0. 8.]]
+(gdb) py vs1 = view2NumpyArray(gdb.parse_and_eval("vs1"))
+(gdb) py m1 = crs2ScipySparse(gdb.parse_and_eval("m"), vs1)
+(gdb) py print(m1)
+  (0, 0)	11
+  (0, 1)	12
+  (1, 1)	13
+  (1, 3)	14
+  (2, 2)	15
+  (2, 3)	16
+  (2, 4)	17
+  (3, 5)	18
+
+```
+
 
 ## Known limitations
 
