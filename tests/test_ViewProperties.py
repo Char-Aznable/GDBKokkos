@@ -14,7 +14,7 @@ shape = [3, 4, 5]
 nameStruct = "Nested"
 cppStruct = f"""
     struct Inner {{
-      long i_[2];
+      long i_[2][3];
       bool b_[2];
       float f_[2];
     }};
@@ -22,7 +22,7 @@ cppStruct = f"""
     struct {nameStruct} {{
       KOKKOS_INLINE_FUNCTION {nameStruct}() = default;
       KOKKOS_INLINE_FUNCTION {nameStruct}(const int i)
-        :a_{{{{i,i}}, {{i > 0, i > 0}}, {{i / 1.f, i / 1.f}}}}
+        :a_{{{{i,i,i,i,i,i}}, {{i > 0, i > 0}}, {{i / 1.f, i / 1.f}}}}
         ,i_{{i}}
         ,d_{{i / 1.}}
         {{}}
@@ -31,7 +31,7 @@ cppStruct = f"""
       double d_;
     }};
     """
-dtypeStruct = [('a_', [('i_', '|i8', 2), ('b_', '|b1', 2), ('f_', '|f4', 2)]),
+dtypeStruct = [('a_', [('i_', '|i8', (2, 3)), ('b_', '|b1', 2), ('f_', '|f4', 2)]),
                ('i_', '|i4'), ('d_', '|f8')]
 cpp = f"""
     #include <Kokkos_Core.hpp>
@@ -241,6 +241,8 @@ def testPrintView(compileTestView, runGDB):
             resultStr = re.sub(r"\n", " ", resultStr)
             resultStr = re.sub(r"^\s+", "", resultStr)
             resultStr = re.sub(r"\)\s+\(", "), (", resultStr)
+            # Add "," between elements of nested list
+            resultStr = re.sub(r"((?<=\d))\s+((?=\d+))", r"\g<1>, \g<2>", resultStr)
             l = list(ast.literal_eval(resultStr))
             if shape.size == 0:
                 # this is a scalar view so l is a list but we need a tuple
@@ -266,4 +268,5 @@ def testPrintView(compileTestView, runGDB):
                 writeable=False)
         assert (result == expected).all(),\
             f"printView gives wrong view of shape {shape}: {r.stdout}. Expected:\n"\
-            f"{expected}"
+            f"{expected}\nBut got:\n"\
+            f"{result}"

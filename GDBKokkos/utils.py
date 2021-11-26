@@ -39,6 +39,9 @@ def foreachMemberOfClass(T : gdb.Type):
 
 def parseGDBArrayType(T : gdb.Type):
     """Parse an input GDB array type into the basic element type and span
+    When the input type is a multidimensional C-array such as int[3][4],
+    this function will recursively call itself to resolve the element type
+    and build a tuple of the multidimensional span.
 
 
     Args:
@@ -46,10 +49,16 @@ def parseGDBArrayType(T : gdb.Type):
     Returns: tuple (gdb.Type for the element, span of the array)
     """
     assert T.code == gdb.TYPE_CODE_ARRAY, f"Type {str(T)} is not array"
-    m = re.match(r'(\S+)\s*\[(\d+)\]', str(T))
-    assert m is not None, f"Can't parse type {str(T)} to array"
-    Element = name2type(m.group(1))
-    span = int(m.group(2))
+    Element = gdb.types.get_basic_type(T.target())
+    r = T.range()
+    span = r[-1] - r[0] + 1
+    if Element.code == gdb.TYPE_CODE_ARRAY:
+        span = (span,)
+        Element, spanNested = parseGDBArrayType(Element)
+        if isinstance(spanNested, tuple):
+            span += spanNested
+        else:
+            span += (spanNested,)
     return (Element, span)
 
 
