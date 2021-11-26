@@ -45,11 +45,14 @@ def getMapKeysVals(m : gdb.Value, depthMax : int = 3):
     mKeys = m["m_keys"]
     mVals = m["m_values"]
     keys = view2NumpyArray(mKeys, depthMax)
-    vals = view2NumpyArray(mVals, depthMax)
 
     ids, capacity = getMapValidIndices(m)
     keysValid = keys[ids]
-    valsValid = vals[ids]
+    # In case the UnorderedMap's Value is void, it represents a set
+    valsValid = None
+    if not m["is_set"]:
+        vals = view2NumpyArray(mVals, depthMax)
+        valsValid = vals[ids]
     return keysValid, valsValid, capacity
 
 def removeByTypesFromNested(l, typesRemove : tuple):
@@ -136,17 +139,20 @@ class printUnorderedMap(gdb.Command):
         m = gdb.parse_and_eval(args.map)
         # Get the keys and vals
         keys, vals, _ = getMapKeysVals(m, args.depthMax)
+        isSet = vals is None
 
         # Remove unwanted types
         typesRemove = tuple([ eval(t) for t in args.hideTypes ])
         if len(typesRemove):
             keys = removeByTypesFromNested(keys.tolist(), typesRemove)
-            vals = removeByTypesFromNested(vals.tolist(), typesRemove)
+            if not isSet:
+                vals = removeByTypesFromNested(vals.tolist(), typesRemove)
 
         if args.flatten:
             n = len(keys)
             keys = np.array(flattenNested(keys)).reshape(n, -1).tolist()
-            vals = np.array(flattenNested(vals)).reshape(n, -1).tolist()
+            if not isSet:
+                vals = np.array(flattenNested(vals)).reshape(n, -1).tolist()
 
         # Convert to dataframe
         # NOTE: as of Pandas version 1.2.4, Python 3.8.10 and GDB 9.2, passing
@@ -154,10 +160,12 @@ class printUnorderedMap(gdb.Command):
         # pd.DataFrame, e.g., as if some columns are garbage collected. So we
         # have to pass the keys and vals and create the pd.DataFrame here
         mKeys = m["m_keys"]
-        mVals = m["m_values"]
         TKey = getKokkosViewValueType(mKeys)
-        TVal = getKokkosViewValueType(mVals)
-        df = pd.DataFrame({str(TKey) : keys, str(TVal) : vals})
+        df = pd.DataFrame({str(TKey) : keys})
+        if not isSet:
+            mVals = m["m_values"]
+            TVal = getKokkosViewValueType(mVals)
+            df[str(TVal)] = vals
 
         if "bytes" in args.hideTypes and args.flatten and args.sortKeys:
             df = df.sort_values(by=[str(TKey)])
